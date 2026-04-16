@@ -34,9 +34,8 @@ export const useWorkspaceStore = create((set, get) => ({
   },
 
   addDestination: async (wsId, payload) => {
-    const { data } = await destinationApi.create(wsId, payload);
-    set((s) => ({ destinations: [...s.destinations, data] }));
-    return data;
+    await destinationApi.create(wsId, payload);
+    // 상태 업데이트는 WS broadcast(destination_added)가 단일 경로로 처리
   },
 
   updateDestination: (updated) => {

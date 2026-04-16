@@ -6,27 +6,45 @@ import PlaceSearch from "./PlaceSearch";
 const MAP_LIBRARIES = ["places"];
 const MAP_CENTER = { lat: 37.5665, lng: 126.978 };
 
+// 한국어 국가명 → ISO 3166-1 alpha-2
+const COUNTRY_CODE_MAP = {
+  한국: "kr", 일본: "jp", 중국: "cn", 미국: "us", 캐나다: "ca",
+  영국: "gb", 프랑스: "fr", 독일: "de", 이탈리아: "it", 스페인: "es",
+  포르투갈: "pt", 네덜란드: "nl", 스위스: "ch", 오스트리아: "at",
+  체코: "cz", 헝가리: "hu", 폴란드: "pl", 그리스: "gr", 터키: "tr",
+  태국: "th", 베트남: "vn", 싱가포르: "sg", 말레이시아: "my",
+  인도네시아: "id", 필리핀: "ph", 홍콩: "hk", 대만: "tw", 인도: "in",
+  호주: "au", 뉴질랜드: "nz", 멕시코: "mx", 브라질: "br", 아르헨티나: "ar",
+  남아프리카: "za", 이집트: "eg", 모로코: "ma", 두바이: "ae", 러시아: "ru",
+};
+
+function getCountryCode(countryName) {
+  if (!countryName) return null;
+  const normalized = countryName.trim().replace(/공화국|연방|왕국/g, "").trim();
+  return COUNTRY_CODE_MAP[normalized] || COUNTRY_CODE_MAP[countryName.trim()] || null;
+}
+
 export default function MapView({ workspaceId }) {
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries: MAP_LIBRARIES,
   });
 
-  const { destinations, addDestination, removeDestination } = useWorkspaceStore();
-  const [selected, setSelected] = useState(null);       // 저장된 핀 InfoWindow
-  const [clickedPOI, setClickedPOI] = useState(null);  // 지도 클릭 임시 핀
+  const { destinations, addDestination, removeDestination, current } = useWorkspaceStore();
+  const [selected, setSelected] = useState(null);
+  const [clickedPOI, setClickedPOI] = useState(null);
+  const [restrictCountry, setRestrictCountry] = useState(true);
   const placesServiceRef = useRef(null);
-  const mapRef = useRef(null);
+
+  const countryCode = getCountryCode(current?.destination_country);
 
   if (!isLoaded) return <div style={styles.loading}>지도 로딩 중...</div>;
 
   const handleMapLoad = (map) => {
-    mapRef.current = map;
     const ghost = document.createElement("div");
     placesServiceRef.current = new window.google.maps.places.PlacesService(ghost);
   };
 
-  // 검색 결과 선택 시 바로 추가
   const handlePlaceSelect = async (place) => {
     await addDestination(workspaceId, {
       name: place.name,
@@ -37,11 +55,10 @@ export default function MapView({ workspaceId }) {
     });
   };
 
-  // 지도 클릭 — POI 클릭 시 place_id로 상세 조회, 빈 공간은 좌표만
   const handleMapClick = (e) => {
     setSelected(null);
     if (e.placeId) {
-      e.stop(); // 기본 InfoWindow 억제
+      e.stop();
       placesServiceRef.current?.getDetails(
         { placeId: e.placeId, fields: ["place_id", "name", "formatted_address", "geometry"] },
         (place, status) => {
@@ -74,9 +91,28 @@ export default function MapView({ workspaceId }) {
   return (
     <div style={styles.container}>
       <div style={styles.sidebar}>
-        <PlaceSearch onSelect={handlePlaceSelect} />
+        {/* 국가 필터 표시 */}
+        {countryCode && (
+          <div style={styles.countryBar}>
+            <span style={styles.countryLabel}>
+              {restrictCountry ? `🔍 ${current.destination_country} 내 검색 중` : "🌍 전 세계 검색 중"}
+            </span>
+            <button
+              style={styles.countryToggle}
+              onClick={() => setRestrictCountry((v) => !v)}
+            >
+              {restrictCountry ? "전 세계 보기" : `${current.destination_country}만 보기`}
+            </button>
+          </div>
+        )}
+
+        <PlaceSearch
+          onSelect={handlePlaceSelect}
+          countryCode={restrictCountry ? countryCode : null}
+        />
+
         <div style={styles.savedHeader}>
-          저장된 목적지 {destinations.length > 0 && <span style={styles.badge}>{destinations.length}</span>}
+          저장된 목적지{destinations.length > 0 && <span style={styles.badge}>{destinations.length}</span>}
         </div>
         <div style={styles.pinList}>
           {destinations.map((d) => (
@@ -103,11 +139,7 @@ export default function MapView({ workspaceId }) {
       <div style={styles.map}>
         <GoogleMap
           mapContainerStyle={{ width: "100%", height: "100%" }}
-          center={
-            destinations[0]
-              ? { lat: destinations[0].lat, lng: destinations[0].lng }
-              : MAP_CENTER
-          }
+          center={destinations[0] ? { lat: destinations[0].lat, lng: destinations[0].lng } : MAP_CENTER}
           zoom={12}
           onLoad={handleMapLoad}
           onClick={handleMapClick}
@@ -122,7 +154,6 @@ export default function MapView({ workspaceId }) {
             ) : null
           )}
 
-          {/* 저장된 핀 InfoWindow */}
           {selected && (
             <InfoWindow
               position={{ lat: selected.lat, lng: selected.lng }}
@@ -136,7 +167,6 @@ export default function MapView({ workspaceId }) {
             </InfoWindow>
           )}
 
-          {/* 지도 클릭 임시 핀 + 추가 버튼 */}
           {clickedPOI && (
             <>
               <Marker
@@ -168,13 +198,16 @@ const styles = {
   sidebar: { width: 290, borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", background: "#fff" },
   map: { flex: 1 },
   loading: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#6b7280" },
+  countryBar: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 12px", background: "#eef2ff", borderBottom: "1px solid #c7d2fe", gap: 8 },
+  countryLabel: { fontSize: 12, color: "#4f46e5", fontWeight: 500 },
+  countryToggle: { fontSize: 11, background: "none", border: "1px solid #a5b4fc", borderRadius: 5, color: "#4f46e5", padding: "3px 8px", cursor: "pointer", whiteSpace: "nowrap" },
+  savedHeader: { display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #e5e7eb", background: "#f9fafb" },
+  badge: { background: "#4f46e5", color: "#fff", borderRadius: 10, fontSize: 11, padding: "1px 6px" },
   pinList: { flex: 1, overflowY: "auto", padding: "0 8px 8px" },
   pinItem: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 8px", borderBottom: "1px solid #f3f4f6", cursor: "pointer" },
   pinName: { margin: 0, fontSize: 14, fontWeight: 500 },
   pinAddr: { margin: "2px 0 0", fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   removeBtn: { background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 14, padding: 4, flexShrink: 0 },
-  savedHeader: { padding: "8px 16px", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", gap: 6, background: "#f9fafb" },
-  badge: { background: "#4f46e5", color: "#fff", borderRadius: 10, fontSize: 11, padding: "1px 6px" },
   empty: { color: "#9ca3af", fontSize: 13, padding: "16px 8px", textAlign: "center" },
   infoAddBtn: { marginTop: 8, width: "100%", padding: "6px 0", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 6, fontSize: 13, cursor: "pointer" },
 };

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-export default function PlaceSearch({ onSelect }) {
+export default function PlaceSearch({ onSelect, countryCode }) {
   const [query, setQuery] = useState("");
   const [predictions, setPredictions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -16,6 +16,9 @@ export default function PlaceSearch({ onSelect }) {
     ghostDiv.current = document.createElement("div");
     placesService.current = new window.google.maps.places.PlacesService(ghostDiv.current);
   }, []);
+
+  // 국가 필터 변경 시 결과 초기화
+  useEffect(() => { setPredictions([]); }, [countryCode]);
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
@@ -34,8 +37,10 @@ export default function PlaceSearch({ onSelect }) {
       return;
     }
     setLoading(true);
+    const params = { input, language: "ko" };
+    if (countryCode) params.componentRestrictions = { country: countryCode };
     autocompleteService.current.getPlacePredictions(
-      { input, language: "ko" },
+      params,
       (results, status) => {
         setLoading(false);
         if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
