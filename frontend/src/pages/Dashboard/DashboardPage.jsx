@@ -6,12 +6,15 @@ import Navbar from "../../components/common/Navbar";
 import { COUNTRIES, getCountry } from "../../utils/countries";
 
 export default function DashboardPage() {
-  const { workspaces, fetchWorkspaces, createWorkspace } = useWorkspaceStore();
+  const { workspaces, fetchWorkspaces, createWorkspace, joinWorkspace } = useWorkspaceStore();
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
 
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ title: "", destination_country: "" });
+  const [showJoin, setShowJoin] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [joinError, setJoinError] = useState("");
+  const [form, setForm] = useState({ title: "", destination_country: "", start_date: "", end_date: "" });
   const [countrySearch, setCountrySearch] = useState("");
   const [showCountryList, setShowCountryList] = useState(false);
 
@@ -23,11 +26,30 @@ export default function DashboardPage() {
 
   const selectedCountry = getCountry(form.destination_country);
 
+  const handleJoin = async (e) => {
+    e.preventDefault();
+    setJoinError("");
+    try {
+      const ws = await joinWorkspace(joinCode.trim().toUpperCase());
+      setShowJoin(false);
+      setJoinCode("");
+      navigate(`/workspaces/${ws.id}`);
+    } catch (err) {
+      setJoinError(err.response?.data?.detail || "참여에 실패했습니다.");
+    }
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
-    const ws = await createWorkspace(form);
+    const payload = {
+      title: form.title,
+      destination_country: form.destination_country || null,
+      start_date: form.start_date || null,
+      end_date: form.end_date || null,
+    };
+    const ws = await createWorkspace(payload);
     setShowCreate(false);
-    setForm({ title: "", destination_country: "" });
+    setForm({ title: "", destination_country: "", start_date: "", end_date: "" });
     setCountrySearch("");
     navigate(`/workspaces/${ws.id}`);
   };
@@ -44,7 +66,10 @@ export default function DashboardPage() {
       <div style={styles.container}>
         <div style={styles.header}>
           <h2 style={styles.greeting}>안녕하세요, {user?.name}님!</h2>
-          <button style={styles.btn} onClick={() => setShowCreate(true)}>+ 새 여행 만들기</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={styles.joinBtn} onClick={() => { setShowJoin(true); setShowCreate(false); }}>코드로 참여</button>
+            <button style={styles.btn} onClick={() => { setShowCreate(true); setShowJoin(false); }}>+ 새 여행 만들기</button>
+          </div>
         </div>
 
         {showCreate && (
@@ -112,9 +137,55 @@ export default function DashboardPage() {
                   )}
                 </div>
 
+                {/* 여행 기간 (선택) */}
+                <div>
+                  <p style={styles.dateLabel}>여행 기간 <span style={styles.optional}>(선택)</span></p>
+                  <div style={styles.dateRow}>
+                    <input
+                      style={{ ...styles.input, flex: 1 }}
+                      type="date"
+                      value={form.start_date}
+                      onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value, end_date: f.end_date && f.end_date < e.target.value ? e.target.value : f.end_date }))}
+                    />
+                    <span style={styles.dateSep}>~</span>
+                    <input
+                      style={{ ...styles.input, flex: 1 }}
+                      type="date"
+                      value={form.end_date}
+                      min={form.start_date || undefined}
+                      onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
                 <div style={styles.row}>
                   <button type="button" style={styles.cancelBtn} onClick={() => { setShowCreate(false); setShowCountryList(false); }}>취소</button>
                   <button type="submit" style={styles.btn}>만들기</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {showJoin && (
+          <div style={styles.modal}>
+            <div style={styles.modalCard}>
+              <h3 style={{ margin: "0 0 8px" }}>여행 참여하기</h3>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>초대 코드를 입력해 여행에 참여하세요.</p>
+              <form onSubmit={handleJoin} style={styles.form}>
+                <input
+                  style={{ ...styles.input, textTransform: "uppercase", letterSpacing: 2, textAlign: "center", fontSize: 18, fontWeight: 600 }}
+                  placeholder="XXXXXXXX"
+                  value={joinCode}
+                  onChange={(e) => { setJoinCode(e.target.value); setJoinError(""); }}
+                  maxLength={8}
+                  autoFocus
+                  required
+                />
+                {joinError && <p style={styles.joinError}>{joinError}</p>}
+                <div style={styles.row}>
+                  <button type="button" style={styles.cancelBtn} onClick={() => { setShowJoin(false); setJoinCode(""); setJoinError(""); }}>취소</button>
+                  <button type="submit" style={styles.btn}>참여</button>
                 </div>
               </form>
             </div>
@@ -154,7 +225,9 @@ const styles = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
   greeting: { margin: 0, fontSize: 22 },
   btn: { padding: "10px 18px", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14 },
+  joinBtn: { padding: "10px 18px", background: "#fff", color: "#4f46e5", border: "1px solid #4f46e5", borderRadius: 8, cursor: "pointer", fontSize: 14 },
   cancelBtn: { padding: "10px 18px", background: "#e5e7eb", color: "#374151", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14 },
+  joinError: { margin: 0, fontSize: 13, color: "#ef4444" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 },
   card: { background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.08)", cursor: "pointer" },
   cardFlag: { fontSize: 28, marginBottom: 8 },
@@ -166,6 +239,11 @@ const styles = {
   form: { display: "flex", flexDirection: "column", gap: 12 },
   input: { padding: "10px 14px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 15 },
   row: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 },
+  // 날짜
+  dateLabel: { margin: "0 0 6px", fontSize: 13, color: "#374151", fontWeight: 500 },
+  optional: { color: "#9ca3af", fontWeight: 400 },
+  dateRow: { display: "flex", alignItems: "center", gap: 6 },
+  dateSep: { color: "#9ca3af", fontSize: 14 },
   // 나라 선택
   countryWrapper: { position: "relative" },
   countryTrigger: { display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none", background: "#fff" },
