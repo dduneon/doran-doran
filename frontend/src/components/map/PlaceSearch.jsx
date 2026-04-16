@@ -8,12 +8,24 @@ export default function PlaceSearch({ onSelect }) {
   const placesService = useRef(null);
   const ghostDiv = useRef(null);
   const debounceTimer = useRef(null);
+  const wrapperRef = useRef(null);
 
   useEffect(() => {
     if (!window.google) return;
     autocompleteService.current = new window.google.maps.places.AutocompleteService();
     ghostDiv.current = document.createElement("div");
     placesService.current = new window.google.maps.places.PlacesService(ghostDiv.current);
+  }, []);
+
+  // 외부 클릭 시 드롭다운 닫기
+  useEffect(() => {
+    const handleOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setPredictions([]);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
   }, []);
 
   const search = (input) => {
@@ -60,7 +72,7 @@ export default function PlaceSearch({ onSelect }) {
   };
 
   return (
-    <div style={styles.wrapper}>
+    <div style={styles.wrapper} ref={wrapperRef}>
       <input
         style={styles.input}
         type="text"

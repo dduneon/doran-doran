@@ -75,6 +75,9 @@ export default function MapView({ workspaceId }) {
     <div style={styles.container}>
       <div style={styles.sidebar}>
         <PlaceSearch onSelect={handlePlaceSelect} />
+        <div style={styles.savedHeader}>
+          저장된 목적지 {destinations.length > 0 && <span style={styles.badge}>{destinations.length}</span>}
+        </div>
         <div style={styles.pinList}>
           {destinations.map((d) => (
             <div key={d.id} style={styles.pinItem} onClick={() => { setClickedPOI(null); setSelected(d); }}>
@@ -84,6 +87,7 @@ export default function MapView({ workspaceId }) {
               </div>
               <button
                 style={styles.removeBtn}
+                title="목적지 삭제"
                 onClick={(e) => { e.stopPropagation(); removeDestination(d.id); }}
               >
                 ✕
@@ -169,6 +173,8 @@ const styles = {
   pinName: { margin: 0, fontSize: 14, fontWeight: 500 },
   pinAddr: { margin: "2px 0 0", fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   removeBtn: { background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 14, padding: 4, flexShrink: 0 },
+  savedHeader: { padding: "8px 16px", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", gap: 6, background: "#f9fafb" },
+  badge: { background: "#4f46e5", color: "#fff", borderRadius: 10, fontSize: 11, padding: "1px 6px" },
   empty: { color: "#9ca3af", fontSize: 13, padding: "16px 8px", textAlign: "center" },
   infoAddBtn: { marginTop: 8, width: "100%", padding: "6px 0", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 6, fontSize: 13, cursor: "pointer" },
 };
