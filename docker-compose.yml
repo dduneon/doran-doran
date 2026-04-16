@@ -2,21 +2,22 @@ version: "3.9"
 
 services:
   db:
-    image: postgres:16-alpine
+    image: mariadb:11
     restart: unless-stopped
     environment:
-      POSTGRES_USER: dorandoran
-      POSTGRES_PASSWORD: dorandoran
-      POSTGRES_DB: dorandoran
+      MARIADB_USER: dorandoran
+      MARIADB_PASSWORD: dorandoran
+      MARIADB_DATABASE: dorandoran
+      MARIADB_ROOT_PASSWORD: rootpassword
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mariadb_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dorandoran"]
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   backend:
     build:
@@ -26,7 +27,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://dorandoran:dorandoran@db:5432/dorandoran
+      DATABASE_URL: mysql+aiomysql://dorandoran:dorandoran@db:3306/dorandoran
       SECRET_KEY: change-me-in-production
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
     depends_on:
@@ -52,4 +53,4 @@ services:
       - ./frontend/src:/app/src
 
 volumes:
-  postgres_data:
+  mariadb_data:

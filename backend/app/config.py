@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     app_name: str = "도란도란 API"
-    database_url: str = "postgresql+asyncpg://dorandoran:dorandoran@localhost:5432/dorandoran"
+    database_url: str = "mysql+aiomysql://dorandoran:dorandoran@localhost:3306/dorandoran"
     secret_key: str = "change-me-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440  # 24 hours
