@@ -39,6 +39,7 @@ export const workspaceApi = {
   update: (id, data) => api.patch(`/workspaces/${id}`, data),
   delete: (id) => api.delete(`/workspaces/${id}`),
   join: (id, inviteCode) => api.post(`/workspaces/${id}/join?invite_code=${inviteCode}`),
+  joinByCode: (inviteCode) => api.post(`/workspaces/join-by-code?invite_code=${inviteCode}`),
 };
 
 // Destinations
@@ -55,6 +56,7 @@ export const itineraryApi = {
   addDay: (wsId, data) => api.post(`/workspaces/${wsId}/itinerary/days`, data),
   addItem: (wsId, dayId, data) => api.post(`/workspaces/${wsId}/itinerary/days/${dayId}/items`, data),
   updateItem: (wsId, itemId, data) => api.patch(`/workspaces/${wsId}/itinerary/items/${itemId}`, data),
+  deleteItem: (wsId, itemId) => api.delete(`/workspaces/${wsId}/itinerary/items/${itemId}`),
   reorder: (wsId, data) => api.post(`/workspaces/${wsId}/itinerary/reorder`, data),
 };
 

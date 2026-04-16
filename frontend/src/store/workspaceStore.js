@@ -17,6 +17,8 @@ export const useWorkspaceStore = create((set, get) => ({
   },
 
   fetchWorkspace: async (id) => {
+    // 워크스페이스 전환 시 이전 데이터 즉시 초기화
+    set({ current: null, destinations: [], itinerary: [], flights: [], accommodations: [], expenses: [], expenseSummary: null });
     const { data } = await workspaceApi.get(id);
     set({ current: data });
   },
@@ -24,6 +26,21 @@ export const useWorkspaceStore = create((set, get) => ({
   createWorkspace: async (payload) => {
     const { data } = await workspaceApi.create(payload);
     set((s) => ({ workspaces: [...s.workspaces, data] }));
+    return data;
+  },
+
+  joinWorkspace: async (inviteCode) => {
+    const { data } = await workspaceApi.joinByCode(inviteCode);
+    set((s) => ({ workspaces: [...s.workspaces, data] }));
+    return data;
+  },
+
+  updateWorkspace: async (id, payload) => {
+    const { data } = await workspaceApi.update(id, payload);
+    set((s) => ({
+      current: s.current?.id === id ? data : s.current,
+      workspaces: s.workspaces.map((w) => (w.id === id ? data : w)),
+    }));
     return data;
   },
 
@@ -44,8 +61,9 @@ export const useWorkspaceStore = create((set, get) => ({
     }));
   },
 
-  removeDestination: (id) => {
-    set((s) => ({ destinations: s.destinations.filter((d) => d.id !== id) }));
+  removeDestination: async (wsId, id) => {
+    await destinationApi.delete(wsId, id);
+    // 상태 업데이트는 WS broadcast(destination_removed)가 처리
   },
 
   // Itinerary
@@ -65,9 +83,29 @@ export const useWorkspaceStore = create((set, get) => ({
     set({ flights: data });
   },
 
+  addFlight: async (wsId, payload) => {
+    const { data } = await flightApi.create(wsId, payload);
+    set((s) => ({ flights: [...s.flights, data] }));
+  },
+
+  deleteFlight: async (wsId, id) => {
+    await flightApi.delete(wsId, id);
+    set((s) => ({ flights: s.flights.filter((f) => f.id !== id) }));
+  },
+
   fetchAccommodations: async (wsId) => {
     const { data } = await accommodationApi.list(wsId);
     set({ accommodations: data });
+  },
+
+  addAccommodation: async (wsId, payload) => {
+    const { data } = await accommodationApi.create(wsId, payload);
+    set((s) => ({ accommodations: [...s.accommodations, data] }));
+  },
+
+  deleteAccommodation: async (wsId, id) => {
+    await accommodationApi.delete(wsId, id);
+    set((s) => ({ accommodations: s.accommodations.filter((a) => a.id !== id) }));
   },
 
   // Expenses
