@@ -58,6 +58,7 @@ export default function ExpenseForm({ workspaceId, members, onClose }) {
               <option>USD</option>
               <option>JPY</option>
               <option>EUR</option>
+              <option>CNY</option>
             </select>
           </div>
           <select style={styles.input} name="category" value={form.category} onChange={handleChange}>

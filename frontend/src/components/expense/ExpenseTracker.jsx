@@ -80,20 +80,36 @@ export default function ExpenseTracker({ workspaceId }) {
           <>
             <div style={styles.totalCard}>
               <p style={styles.totalLabel}>총 지출</p>
-              <p style={styles.totalAmount}>
-                {expenseSummary.total_amount.toLocaleString("ko-KR")} {expenseSummary.currency}
-              </p>
+              {Object.entries(expenseSummary.totals_by_currency).length === 0 && (
+                <p style={styles.totalEmpty}>지출 없음</p>
+              )}
+              {Object.entries(expenseSummary.totals_by_currency).map(([cur, amt]) => (
+                <p key={cur} style={styles.totalAmount}>
+                  {amt.toLocaleString("ko-KR")} <span style={styles.totalCurrency}>{cur}</span>
+                </p>
+              ))}
             </div>
             <h4 style={styles.perPersonTitle}>인당 정산</h4>
-            {Object.entries(expenseSummary.per_person).map(([uid, amount]) => (
-              <div key={uid} style={styles.personRow}>
-                <span>{memberMap[uid] || uid}</span>
-                <span style={{ color: amount > 0 ? "#ef4444" : "#10b981", fontWeight: 600 }}>
-                  {amount > 0 ? `+${amount.toLocaleString("ko-KR")}` : amount.toLocaleString("ko-KR")} 원
-                </span>
-              </div>
-            ))}
-            <p style={styles.settleNote}>양수: 더 받아야 할 금액 / 음수: 더 내야 할 금액</p>
+            {Object.entries(expenseSummary.per_person).map(([uid, byCurrency]) => {
+              const nonZero = Object.entries(byCurrency).filter(([, v]) => Math.round(v) !== 0);
+              if (nonZero.length === 0) return null;
+              return (
+                <div key={uid} style={styles.personBlock}>
+                  <span style={styles.personName}>{memberMap[uid] || uid}</span>
+                  <div style={styles.personAmounts}>
+                    {nonZero.map(([cur, amount]) => (
+                      <span
+                        key={cur}
+                        style={{ ...styles.personAmount, color: amount < 0 ? "#ef4444" : "#10b981" }}
+                      >
+                        {amount < 0 ? "" : "+"}{Math.round(amount).toLocaleString("ko-KR")} {cur}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            <p style={styles.settleNote}>양수: 더 받아야 할 금액 · 음수: 더 내야 할 금액</p>
           </>
         )}
       </div>
@@ -126,10 +142,15 @@ const styles = {
   amount: { fontSize: 14, fontWeight: 600 },
   deleteBtn: { background: "none", border: "none", cursor: "pointer", color: "#d1d5db", fontSize: 13 },
   empty: { color: "#9ca3af", textAlign: "center", padding: 24 },
-  totalCard: { background: "#eef2ff", borderRadius: 10, padding: 16, marginBottom: 16, textAlign: "center" },
-  totalLabel: { margin: "0 0 4px", fontSize: 12, color: "#6b7280" },
-  totalAmount: { margin: 0, fontSize: 22, fontWeight: 700, color: "#4f46e5" },
+  totalCard: { background: "#eef2ff", borderRadius: 10, padding: "12px 16px", marginBottom: 16 },
+  totalLabel: { margin: "0 0 8px", fontSize: 12, color: "#6b7280" },
+  totalEmpty: { margin: 0, fontSize: 14, color: "#9ca3af" },
+  totalAmount: { margin: "2px 0 0", fontSize: 20, fontWeight: 700, color: "#4f46e5" },
+  totalCurrency: { fontSize: 13, fontWeight: 500 },
   perPersonTitle: { margin: "0 0 10px", fontSize: 14, fontWeight: 600, color: "#374151" },
-  personRow: { display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #f3f4f6", fontSize: 14 },
+  personBlock: { padding: "8px 0", borderBottom: "1px solid #f3f4f6" },
+  personName: { fontSize: 13, fontWeight: 500, color: "#374151" },
+  personAmounts: { display: "flex", flexDirection: "column", gap: 2, marginTop: 4 },
+  personAmount: { fontSize: 13, fontWeight: 600 },
   settleNote: { marginTop: 12, fontSize: 11, color: "#9ca3af" },
 };

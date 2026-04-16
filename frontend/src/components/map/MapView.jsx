@@ -13,9 +13,10 @@ export default function MapView({ workspaceId }) {
     libraries: MAP_LIBRARIES,
   });
 
-  const { destinations, addDestination, removeDestination, current } = useWorkspaceStore();
+  const { destinations, accommodations, flights, addDestination, removeDestination, current } = useWorkspaceStore();
   const [selected, setSelected] = useState(null);
   const [clickedPOI, setClickedPOI] = useState(null);
+  const [pendingPlace, setPendingPlace] = useState(null); // { name, customName, address, lat, lng, place_id }
   const [restrictCountry, setRestrictCountry] = useState(true);
   const placesServiceRef = useRef(null);
 
@@ -30,14 +31,16 @@ export default function MapView({ workspaceId }) {
     placesServiceRef.current = new window.google.maps.places.PlacesService(ghost);
   };
 
-  const handlePlaceSelect = async (place) => {
-    await addDestination(workspaceId, {
+  const handlePlaceSelect = (place) => {
+    setPendingPlace({
       name: place.name,
+      customName: place.name,
       address: place.formatted_address,
       lat: place.geometry.location.lat(),
       lng: place.geometry.location.lng(),
       place_id: place.place_id,
     });
+    setClickedPOI(null);
   };
 
   const handleMapClick = (e) => {
@@ -67,10 +70,22 @@ export default function MapView({ workspaceId }) {
     }
   };
 
-  const handleAddClickedPOI = async () => {
+  const handleAddClickedPOI = () => {
     if (!clickedPOI) return;
-    await addDestination(workspaceId, clickedPOI);
+    setPendingPlace({ ...clickedPOI, customName: clickedPOI.name });
     setClickedPOI(null);
+  };
+
+  const handleConfirmAdd = async () => {
+    if (!pendingPlace) return;
+    await addDestination(workspaceId, {
+      name: pendingPlace.customName.trim() || pendingPlace.name,
+      address: pendingPlace.address,
+      lat: pendingPlace.lat,
+      lng: pendingPlace.lng,
+      place_id: pendingPlace.place_id,
+    });
+    setPendingPlace(null);
   };
 
   return (
@@ -95,6 +110,26 @@ export default function MapView({ workspaceId }) {
           countryCode={restrictCountry ? countryCode : null}
         />
 
+        {/* 장소 추가 확인 */}
+        {pendingPlace && (
+          <div style={styles.pendingCard}>
+            <p style={styles.pendingLabel}>장소명 수정 후 추가</p>
+            <input
+              style={styles.pendingInput}
+              value={pendingPlace.customName}
+              onChange={(e) => setPendingPlace((p) => ({ ...p, customName: e.target.value }))}
+              autoFocus
+            />
+            {pendingPlace.address && (
+              <p style={styles.pendingAddr}>{pendingPlace.address}</p>
+            )}
+            <div style={styles.pendingBtns}>
+              <button style={styles.pendingCancel} onClick={() => setPendingPlace(null)}>취소</button>
+              <button style={styles.pendingConfirm} onClick={handleConfirmAdd}>추가</button>
+            </div>
+          </div>
+        )}
+
         <div style={styles.savedHeader}>
           저장된 목적지{destinations.length > 0 && <span style={styles.badge}>{destinations.length}</span>}
         </div>
@@ -108,7 +143,7 @@ export default function MapView({ workspaceId }) {
               <button
                 style={styles.removeBtn}
                 title="목적지 삭제"
-                onClick={(e) => { e.stopPropagation(); removeDestination(d.id); }}
+                onClick={(e) => { e.stopPropagation(); removeDestination(workspaceId, d.id); }}
               >
                 ✕
               </button>
@@ -138,6 +173,34 @@ export default function MapView({ workspaceId }) {
             ) : null
           )}
 
+          {/* 숙소 핀 */}
+          {accommodations.filter((a) => a.lat && a.lng).map((a) => (
+            <Marker
+              key={`acc-${a.id}`}
+              position={{ lat: a.lat, lng: a.lng }}
+              icon={{ url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" }}
+              onClick={() => { setClickedPOI(null); setSelected({ ...a, _type: "accommodation" }); }}
+            />
+          ))}
+
+          {/* 항공편 공항 핀 */}
+          {flights.filter((f) => f.departure_lat && f.departure_lng).map((f) => (
+            <Marker
+              key={`dep-${f.id}`}
+              position={{ lat: f.departure_lat, lng: f.departure_lng }}
+              icon={{ url: "http://maps.google.com/mapfiles/ms/icons/purple-dot.png" }}
+              onClick={() => { setClickedPOI(null); setSelected({ name: `✈️ 출발: ${f.departure_airport}`, lat: f.departure_lat, lng: f.departure_lng, _type: "airport" }); }}
+            />
+          ))}
+          {flights.filter((f) => f.arrival_lat && f.arrival_lng).map((f) => (
+            <Marker
+              key={`arr-${f.id}`}
+              position={{ lat: f.arrival_lat, lng: f.arrival_lng }}
+              icon={{ url: "http://maps.google.com/mapfiles/ms/icons/purple-dot.png" }}
+              onClick={() => { setClickedPOI(null); setSelected({ name: `✈️ 도착: ${f.arrival_airport}`, lat: f.arrival_lat, lng: f.arrival_lng, _type: "airport" }); }}
+            />
+          ))}
+
           {selected && (
             <InfoWindow
               position={{ lat: selected.lat, lng: selected.lng }}
@@ -146,6 +209,11 @@ export default function MapView({ workspaceId }) {
               <div style={{ maxWidth: 200 }}>
                 <strong style={{ fontSize: 14 }}>{selected.name}</strong>
                 {selected.address && <p style={{ margin: "4px 0 0", fontSize: 12 }}>{selected.address}</p>}
+                {selected._type === "accommodation" && selected.check_in && (
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: "#059669" }}>
+                    체크인 {new Date(selected.check_in).toLocaleDateString("ko-KR")}
+                  </p>
+                )}
                 {selected.note && <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6b7280" }}>{selected.note}</p>}
               </div>
             </InfoWindow>
@@ -194,4 +262,11 @@ const styles = {
   removeBtn: { background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 14, padding: 4, flexShrink: 0 },
   empty: { color: "#9ca3af", fontSize: 13, padding: "16px 8px", textAlign: "center" },
   infoAddBtn: { marginTop: 8, width: "100%", padding: "6px 0", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 6, fontSize: 13, cursor: "pointer" },
+  pendingCard: { margin: "0 10px 0", padding: "10px 12px", background: "#fafafa", border: "1px solid #c7d2fe", borderRadius: 8, display: "flex", flexDirection: "column", gap: 6 },
+  pendingLabel: { margin: 0, fontSize: 11, color: "#4f46e5", fontWeight: 600 },
+  pendingInput: { padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14, outline: "none" },
+  pendingAddr: { margin: 0, fontSize: 11, color: "#9ca3af" },
+  pendingBtns: { display: "flex", gap: 6 },
+  pendingCancel: { flex: 1, padding: "6px 0", background: "#e5e7eb", border: "none", borderRadius: 6, fontSize: 13, cursor: "pointer" },
+  pendingConfirm: { flex: 1, padding: "6px 0", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 6, fontSize: 13, cursor: "pointer" },
 };
