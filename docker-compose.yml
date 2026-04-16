@@ -1,24 +1,6 @@
 version: "3.9"
 
 services:
-  db:
-    image: mariadb:11
-    restart: unless-stopped
-    environment:
-      MARIADB_USER: dorandoran
-      MARIADB_PASSWORD: dorandoran
-      MARIADB_DATABASE: dorandoran
-      MARIADB_ROOT_PASSWORD: rootpassword
-    ports:
-      - "3306:3306"
-    volumes:
-      - mariadb_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   backend:
     build:
       context: ./backend
@@ -27,12 +9,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: mysql+aiomysql://dorandoran:dorandoran@db:3306/dorandoran
+      DATABASE_URL: mysql+aiomysql://dorandoran:password@YOUR_DB_HOST:3306/dorandoran
       SECRET_KEY: change-me-in-production
-      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
-    depends_on:
-      db:
-        condition: service_healthy
+      GOOGLE_MAPS_API_KEY: YOUR_GOOGLE_MAPS_API_KEY
     volumes:
       - ./backend:/app
 
@@ -46,11 +25,8 @@ services:
     environment:
       VITE_API_URL: http://localhost:8000
       VITE_WS_URL: ws://localhost:8000
-      VITE_GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      VITE_GOOGLE_MAPS_API_KEY: YOUR_GOOGLE_MAPS_API_KEY
     depends_on:
       - backend
     volumes:
       - ./frontend/src:/app/src
-
-volumes:
-  mariadb_data:
