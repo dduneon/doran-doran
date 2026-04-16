@@ -1,28 +1,11 @@
 import { useRef, useState } from "react";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 import { useWorkspaceStore } from "../../store/workspaceStore";
+import { getCountry } from "../../utils/countries";
 import PlaceSearch from "./PlaceSearch";
 
 const MAP_LIBRARIES = ["places"];
 const MAP_CENTER = { lat: 37.5665, lng: 126.978 };
-
-// 한국어 국가명 → ISO 3166-1 alpha-2
-const COUNTRY_CODE_MAP = {
-  한국: "kr", 일본: "jp", 중국: "cn", 미국: "us", 캐나다: "ca",
-  영국: "gb", 프랑스: "fr", 독일: "de", 이탈리아: "it", 스페인: "es",
-  포르투갈: "pt", 네덜란드: "nl", 스위스: "ch", 오스트리아: "at",
-  체코: "cz", 헝가리: "hu", 폴란드: "pl", 그리스: "gr", 터키: "tr",
-  태국: "th", 베트남: "vn", 싱가포르: "sg", 말레이시아: "my",
-  인도네시아: "id", 필리핀: "ph", 홍콩: "hk", 대만: "tw", 인도: "in",
-  호주: "au", 뉴질랜드: "nz", 멕시코: "mx", 브라질: "br", 아르헨티나: "ar",
-  남아프리카: "za", 이집트: "eg", 모로코: "ma", 두바이: "ae", 러시아: "ru",
-};
-
-function getCountryCode(countryName) {
-  if (!countryName) return null;
-  const normalized = countryName.trim().replace(/공화국|연방|왕국/g, "").trim();
-  return COUNTRY_CODE_MAP[normalized] || COUNTRY_CODE_MAP[countryName.trim()] || null;
-}
 
 export default function MapView({ workspaceId }) {
   const { isLoaded } = useJsApiLoader({
@@ -36,7 +19,9 @@ export default function MapView({ workspaceId }) {
   const [restrictCountry, setRestrictCountry] = useState(true);
   const placesServiceRef = useRef(null);
 
-  const countryCode = getCountryCode(current?.destination_country);
+  // destination_country는 ISO 코드("jp" 등)로 저장됨
+  const countryCode = current?.destination_country || null;
+  const countryInfo = getCountry(countryCode);
 
   if (!isLoaded) return <div style={styles.loading}>지도 로딩 중...</div>;
 
@@ -92,16 +77,15 @@ export default function MapView({ workspaceId }) {
     <div style={styles.container}>
       <div style={styles.sidebar}>
         {/* 국가 필터 표시 */}
-        {countryCode && (
+        {countryCode && countryInfo && (
           <div style={styles.countryBar}>
             <span style={styles.countryLabel}>
-              {restrictCountry ? `🔍 ${current.destination_country} 내 검색 중` : "🌍 전 세계 검색 중"}
+              {restrictCountry
+                ? `${countryInfo.flag} ${countryInfo.name} 내 검색 중`
+                : "🌍 전 세계 검색 중"}
             </span>
-            <button
-              style={styles.countryToggle}
-              onClick={() => setRestrictCountry((v) => !v)}
-            >
-              {restrictCountry ? "전 세계 보기" : `${current.destination_country}만 보기`}
+            <button style={styles.countryToggle} onClick={() => setRestrictCountry((v) => !v)}>
+              {restrictCountry ? "전 세계 보기" : `${countryInfo.name}만 보기`}
             </button>
           </div>
         )}
