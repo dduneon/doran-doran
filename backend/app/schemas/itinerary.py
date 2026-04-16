@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date as Date_, datetime
 
 from pydantic import BaseModel
 
@@ -33,14 +33,14 @@ class ItineraryItemResponse(BaseModel):
 
 class ItineraryDayCreate(BaseModel):
     day_number: int
-    date: date | None = None
+    date: Date_ | None = None
 
 
 class ItineraryDayResponse(BaseModel):
     id: str
     workspace_id: str
     day_number: int
-    date: date | None = None
+    date: Date_ | None = None
     items: list[ItineraryItemResponse] = []
 
     model_config = {"from_attributes": True}

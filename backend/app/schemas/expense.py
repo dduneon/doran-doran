@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date as Date_, datetime
 
 from pydantic import BaseModel
 
@@ -12,7 +12,7 @@ class ExpenseCreate(BaseModel):
     currency: str = "KRW"
     category: ExpenseCategory = ExpenseCategory.OTHER
     participant_ids: list[str] = []
-    date: date | None = None
+    date: Date_ | None = None
     note: str | None = None
 
 
@@ -22,7 +22,7 @@ class ExpenseUpdate(BaseModel):
     currency: str | None = None
     category: ExpenseCategory | None = None
     participant_ids: list[str] | None = None
-    date: date | None = None
+    date: Date_ | None = None
     note: str | None = None
 
 
@@ -36,7 +36,7 @@ class ExpenseResponse(BaseModel):
     paid_by: str
     paid_by_user: UserResponse
     participant_ids: list[str]
-    date: date | None = None
+    date: Date_ | None = None
     note: str | None = None
     created_at: datetime
 
