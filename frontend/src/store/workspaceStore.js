@@ -87,7 +87,12 @@ export const useWorkspaceStore = create((set, get) => ({
     const { event: type, data } = event;
     switch (type) {
       case "destination_added":
-        set((s) => ({ destinations: [...s.destinations, data] }));
+        // API 응답으로 이미 추가된 경우 WS 브로드캐스트는 무시
+        set((s) =>
+          s.destinations.find((d) => d.id === data.id)
+            ? s
+            : { destinations: [...s.destinations, data] }
+        );
         break;
       case "destination_updated":
         set((s) => ({
