@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -51,8 +51,14 @@ class Flight(Base):
     workspace_id: Mapped[str] = mapped_column(String(36), ForeignKey("workspaces.id"), nullable=False)
     flight_number: Mapped[str] = mapped_column(String(20), nullable=False)
     airline: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    departure_airport: Mapped[str] = mapped_column(String(10), nullable=False)
-    arrival_airport: Mapped[str] = mapped_column(String(10), nullable=False)
+    departure_airport: Mapped[str] = mapped_column(String(300), nullable=False)
+    departure_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    departure_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    departure_place_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    arrival_airport: Mapped[str] = mapped_column(String(300), nullable=False)
+    arrival_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    arrival_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    arrival_place_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
     departure_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     arrival_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     terminal: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -69,6 +75,9 @@ class Accommodation(Base):
     workspace_id: Mapped[str] = mapped_column(String(36), ForeignKey("workspaces.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(300), nullable=False)
     address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    place_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
     check_in: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     check_out: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     confirmation_number: Mapped[str | None] = mapped_column(String(100), nullable=True)

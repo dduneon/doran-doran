@@ -103,20 +103,25 @@ async def get_summary(
     )
     expenses = result.scalars().all()
 
-    total = sum(e.amount for e in expenses)
-    per_person: dict[str, float] = {}
+    totals_by_currency: dict[str, float] = {}
+    per_person: dict[str, dict[str, float]] = {}
+
     for e in expenses:
+        cur = e.currency
+        totals_by_currency[cur] = totals_by_currency.get(cur, 0) + e.amount
+
         participants = e.participant_ids or []
         if not participants:
             continue
         share = e.amount / len(participants)
         for uid in participants:
-            per_person[uid] = per_person.get(uid, 0) + share
-        per_person[e.paid_by] = per_person.get(e.paid_by, 0) - e.amount
+            per_person.setdefault(uid, {})
+            per_person[uid][cur] = per_person[uid].get(cur, 0) + share
+        per_person.setdefault(e.paid_by, {})
+        per_person[e.paid_by][cur] = per_person[e.paid_by].get(cur, 0) - e.amount
 
     return ExpenseSummary(
-        total_amount=total,
-        currency="KRW",
+        totals_by_currency=totals_by_currency,
         per_person=per_person,
         expenses=[ExpenseResponse.model_validate(e) for e in expenses],
     )

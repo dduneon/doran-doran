@@ -54,7 +54,13 @@ class FlightCreate(BaseModel):
     flight_number: str
     airline: str | None = None
     departure_airport: str
+    departure_lat: float | None = None
+    departure_lng: float | None = None
+    departure_place_id: str | None = None
     arrival_airport: str
+    arrival_lat: float | None = None
+    arrival_lng: float | None = None
+    arrival_place_id: str | None = None
     departure_time: datetime | None = None
     arrival_time: datetime | None = None
     terminal: str | None = None
@@ -67,7 +73,11 @@ class FlightResponse(BaseModel):
     flight_number: str
     airline: str | None = None
     departure_airport: str
+    departure_lat: float | None = None
+    departure_lng: float | None = None
     arrival_airport: str
+    arrival_lat: float | None = None
+    arrival_lng: float | None = None
     departure_time: datetime | None = None
     arrival_time: datetime | None = None
     terminal: str | None = None
@@ -80,6 +90,9 @@ class FlightResponse(BaseModel):
 class AccommodationCreate(BaseModel):
     name: str
     address: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    place_id: str | None = None
     check_in: datetime | None = None
     check_out: datetime | None = None
     confirmation_number: str | None = None
@@ -91,6 +104,8 @@ class AccommodationResponse(BaseModel):
     workspace_id: str
     name: str
     address: str | None = None
+    lat: float | None = None
+    lng: float | None = None
     check_in: datetime | None = None
     check_out: datetime | None = None
     confirmation_number: str | None = None

@@ -44,7 +44,6 @@ class ExpenseResponse(BaseModel):
 
 
 class ExpenseSummary(BaseModel):
-    total_amount: float
-    currency: str
-    per_person: dict[str, float]  # user_id -> amount owed
+    totals_by_currency: dict[str, float]          # currency -> total
+    per_person: dict[str, dict[str, float]]       # user_id -> currency -> net amount
     expenses: list[ExpenseResponse]

@@ -113,6 +113,22 @@ async def update_item(
     return item
 
 
+@router.delete("/itinerary/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_item(
+    workspace_id: str,
+    item_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_member(workspace_id, current_user, db)
+    result = await db.execute(select(ItineraryItem).where(ItineraryItem.id == item_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    await db.delete(item)
+    await manager.broadcast(workspace_id, {"event": "itinerary_updated"})
+
+
 @router.post("/itinerary/reorder")
 async def reorder_items(
     workspace_id: str,
