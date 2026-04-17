@@ -11,10 +11,6 @@ services:
       - service-net
       - default
 
-networks:
-  service-net:
-    external: true
-
   frontend:
     image: ghcr.io/dduneon/dorandoran-frontend:latest
     restart: unless-stopped
@@ -22,3 +18,7 @@ networks:
       - "80:80"
     depends_on:
       - backend
+
+networks:
+  service-net:
+    external: true
