@@ -48,5 +48,4 @@ Thumbs.db
 *.sqlite
 
 # Alembic
-backend/alembic/versions/*.py
-!backend/alembic/versions/.gitkeep
+# (migration files should be committed)
