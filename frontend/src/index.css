@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html, body, #root {
+    height: 100%;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: #1F2937;
+    background: #F7F7F7;
+  }
+
+  a { text-decoration: none; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+}
+
+@layer components {
+  /* ── Glass panel ── */
+  .glass {
+    @apply bg-white/85 backdrop-blur-xl border border-white/60 shadow-glass;
+  }
+  .glass-dark {
+    @apply bg-gray-900/70 backdrop-blur-xl border border-white/10 shadow-glass;
+  }
+  .glass-subtle {
+    @apply bg-white/70 backdrop-blur-lg border border-white/50 shadow-float;
+  }
+
+  /* ── Input ── */
+  .input-glass {
+    @apply w-full bg-white/90 backdrop-blur-sm border border-white/60
+           rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-400
+           outline-none transition-all duration-150
+           focus:bg-white focus:border-coral-500 focus:ring-2 focus:ring-coral-500/20
+           shadow-sm;
+  }
+
+  /* ── Button variants ── */
+  .btn-coral {
+    @apply bg-coral-500 hover:bg-coral-600 active:bg-coral-700
+           text-white font-semibold rounded-xl px-5 py-2.5
+           transition-all duration-150 shadow-float
+           hover:shadow-md active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply bg-white/80 hover:bg-white text-gray-700 font-medium
+           border border-gray-200/80 rounded-xl px-4 py-2.5
+           transition-all duration-150 backdrop-blur-sm;
+  }
+  .btn-pill {
+    @apply rounded-full px-4 py-1.5 text-sm font-medium
+           transition-all duration-150;
+  }
+
+  /* ── Card ── */
+  .card {
+    @apply bg-white rounded-2xl shadow-card border border-gray-100;
+  }
+  .card-hover {
+    @apply card transition-all duration-200
+           hover:-translate-y-1 hover:shadow-glass cursor-pointer;
+  }
+
+  /* ── Bento tile ── */
+  .bento {
+    @apply rounded-2xl overflow-hidden;
+  }
+}
