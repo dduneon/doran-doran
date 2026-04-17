@@ -1,42 +1,39 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import { WorkspaceSocket } from "../../services/websocket";
-import Navbar from "../../components/common/Navbar";
+import GlassNavbar from "../../components/common/Navbar";
 import MapView from "../../components/map/MapView";
 import ItineraryBoard from "../../components/itinerary/ItineraryBoard";
 import ExpenseTracker from "../../components/expense/ExpenseTracker";
 import { getCountry } from "../../utils/countries";
 
-const TABS = ["지도", "일정", "가계부"];
+const TABS = [
+  { id: "지도",   icon: "🗺️", label: "지도"   },
+  { id: "일정",   icon: "📅", label: "일정"   },
+  { id: "가계부", icon: "💰", label: "가계부" },
+];
 
-function formatDate(iso) {
+function toDateInput(iso) { return iso ? iso.slice(0, 10) : ""; }
+function fmtDate(iso) {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
-}
-
-function toDateInput(iso) {
-  if (!iso) return "";
-  return iso.slice(0, 10);
+  return new Date(iso).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
 }
 
 export default function WorkspacePage() {
   const { workspaceId } = useParams();
-  const { fetchWorkspace, fetchDestinations, fetchItinerary, fetchFlights, fetchAccommodations, fetchExpenses, handleWsEvent, current, updateWorkspace } = useWorkspaceStore();
+  const navigate = useNavigate();
+  const {
+    fetchWorkspace, fetchDestinations, fetchItinerary, fetchFlights,
+    fetchAccommodations, fetchExpenses, handleWsEvent, current, updateWorkspace,
+  } = useWorkspaceStore();
 
-  const [tab, setTab] = useState("지도");
+  const [tab, setTab]               = useState("지도");
+  const [editDate, setEditDate]     = useState(false);
+  const [dateForm, setDateForm]     = useState({ start_date: "", end_date: "" });
+  const [copied, setCopied]         = useState(false);
   const socketRef = useRef(null);
-
-  const [editingDate, setEditingDate] = useState(false);
-  const [dateForm, setDateForm] = useState({ start_date: "", end_date: "" });
-  const [copied, setCopied] = useState(false);
-
-  const handleCopyCode = () => {
-    if (!current?.invite_code) return;
-    navigator.clipboard.writeText(current.invite_code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   useEffect(() => {
     fetchWorkspace(workspaceId);
@@ -45,145 +42,236 @@ export default function WorkspacePage() {
     fetchFlights(workspaceId);
     fetchAccommodations(workspaceId);
     fetchExpenses(workspaceId);
-
     socketRef.current = new WorkspaceSocket(workspaceId, handleWsEvent);
     socketRef.current.connect();
-
     return () => socketRef.current?.disconnect();
   }, [workspaceId]);
 
   const openDateEdit = () => {
-    setDateForm({
-      start_date: toDateInput(current?.start_date),
-      end_date: toDateInput(current?.end_date),
-    });
-    setEditingDate(true);
+    setDateForm({ start_date: toDateInput(current?.start_date), end_date: toDateInput(current?.end_date) });
+    setEditDate(true);
   };
-
-  const handleDateSave = async () => {
-    await updateWorkspace(workspaceId, {
-      start_date: dateForm.start_date || null,
-      end_date: dateForm.end_date || null,
-    });
+  const saveDates = async () => {
+    await updateWorkspace(workspaceId, { start_date: dateForm.start_date || null, end_date: dateForm.end_date || null });
     await fetchItinerary(workspaceId);
-    setEditingDate(false);
+    setEditDate(false);
+  };
+  const copyCode = () => {
+    if (!current?.invite_code) return;
+    navigator.clipboard.writeText(current.invite_code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const dateDisplay = current?.start_date
-    ? `${formatDate(current.start_date)}${current.end_date ? ` ~ ${formatDate(current.end_date)}` : ""}`
+  const country   = current?.destination_country ? getCountry(current.destination_country) : null;
+  const dateLabel = current?.start_date
+    ? `${fmtDate(current.start_date)}${current.end_date ? ` ~ ${fmtDate(current.end_date)}` : ""}`
     : null;
 
+  const panelVariants = {
+    hidden: { opacity: 0, x: -24, scale: 0.97 },
+    visible: { opacity: 1, x: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 28 } },
+    exit:   { opacity: 0, x: -16, scale: 0.97, transition: { duration: 0.15 } },
+  };
+  const overlayVariants = {
+    hidden:  { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 280, damping: 24 } },
+    exit:    { opacity: 0, y: 10, transition: { duration: 0.15 } },
+  };
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <Navbar />
-      <div style={styles.subbar}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={styles.wsTitle}>{current?.title || "..."}</span>
-          {current?.destination_country && (
-            <span style={styles.wsSub}>
-              {(() => { const c = getCountry(current.destination_country); return c ? `${c.flag} ${c.name}` : current.destination_country; })()}
-            </span>
-          )}
-          {dateDisplay && (
-            <span style={styles.dateBadge}>{dateDisplay}</span>
-          )}
-          <button style={styles.editDateBtn} onClick={openDateEdit} title="여행 기간 수정">
-            {dateDisplay ? "✏️" : "📅 기간 설정"}
+    <div className="relative w-screen h-screen overflow-hidden bg-gray-200">
+
+      {/* ━━━ 풀스크린 지도 (항상 렌더링) ━━━ */}
+      <div className="absolute inset-0 z-0">
+        <MapView workspaceId={workspaceId} fullscreen />
+      </div>
+
+      {/* ━━━ 상단 글래스 Navbar ━━━ */}
+      <div className="absolute top-0 inset-x-0 z-50">
+        <GlassNavbar />
+      </div>
+
+      {/* ━━━ 워크스페이스 정보 바 ━━━ */}
+      <div className="absolute top-16 inset-x-0 z-40 flex items-center justify-between px-5 py-2">
+        {/* 왼쪽: 뒤로 + 워크스페이스 제목 */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate("/")}
+            className="glass rounded-full p-2 text-gray-500 hover:text-coral-500 transition-colors duration-150"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
           </button>
+          <div className="glass rounded-2xl px-4 py-2 flex items-center gap-2.5">
+            <span className="font-bold text-gray-800 text-sm">{current?.title || "…"}</span>
+            {country && <span className="text-sm text-gray-500">{country.flag} {country.name}</span>}
+            {dateLabel
+              ? (
+                <button
+                  onClick={openDateEdit}
+                  className="text-xs text-coral-500 bg-coral-50 px-2.5 py-1 rounded-full font-semibold
+                             hover:bg-coral-100 transition-colors duration-150"
+                >
+                  📅 {dateLabel}
+                </button>
+              ) : (
+                <button
+                  onClick={openDateEdit}
+                  className="text-xs text-gray-400 bg-gray-100/80 px-2.5 py-1 rounded-full font-medium
+                             hover:text-coral-500 hover:bg-coral-50 transition-colors duration-150"
+                >
+                  + 기간 설정
+                </button>
+              )
+            }
+          </div>
         </div>
-        <div style={styles.inviteRow}>
-          <span style={styles.inviteLabel}>초대 코드</span>
-          <code style={styles.inviteCode}>{current?.invite_code}</code>
-          <button style={styles.copyBtn} onClick={handleCopyCode}>
+
+        {/* 오른쪽: 초대 코드 */}
+        <div className="glass rounded-2xl px-3 py-2 flex items-center gap-2">
+          <span className="text-xs text-gray-400 font-medium">초대 코드</span>
+          <code className="text-sm font-bold text-gray-700 tracking-widest">{current?.invite_code}</code>
+          <button
+            onClick={copyCode}
+            className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all duration-150
+              ${copied
+                ? "bg-emerald-100 text-emerald-600"
+                : "bg-coral-50 text-coral-500 hover:bg-coral-100"
+              }`}
+          >
             {copied ? "✓ 복사됨" : "복사"}
           </button>
         </div>
       </div>
 
-      {editingDate && (
-        <div style={styles.modal}>
-          <div style={styles.modalCard}>
-            <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>여행 기간 설정</h3>
-            <div style={styles.dateRow}>
-              <div style={{ flex: 1 }}>
-                <p style={styles.dateLabel}>시작일</p>
-                <input
-                  style={styles.input}
-                  type="date"
-                  value={dateForm.start_date}
-                  onChange={(e) => setDateForm((f) => ({
-                    ...f,
-                    start_date: e.target.value,
-                    end_date: f.end_date && f.end_date < e.target.value ? e.target.value : f.end_date,
-                  }))}
+      {/* ━━━ 탭 셀렉터 (중앙 floating pills) ━━━ */}
+      <div className="absolute top-[116px] left-1/2 -translate-x-1/2 z-40">
+        <div className="glass rounded-full p-1 flex gap-0.5 shadow-glass">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`relative px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200
+                ${tab === t.id
+                  ? "text-white shadow-float"
+                  : "text-gray-500 hover:text-gray-800"
+                }`}
+            >
+              {tab === t.id && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute inset-0 bg-coral-500 rounded-full"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
-              </div>
-              <span style={styles.dateSep}>~</span>
-              <div style={{ flex: 1 }}>
-                <p style={styles.dateLabel}>종료일</p>
-                <input
-                  style={styles.input}
-                  type="date"
-                  value={dateForm.end_date}
-                  min={dateForm.start_date || undefined}
-                  onChange={(e) => setDateForm((f) => ({ ...f, end_date: e.target.value }))}
-                />
-              </div>
-            </div>
-            {(dateForm.start_date || dateForm.end_date) && (
-              <button
-                style={{ ...styles.clearBtn }}
-                onClick={() => setDateForm({ start_date: "", end_date: "" })}
-              >
-                기간 삭제
-              </button>
-            )}
-            <div style={styles.btnRow}>
-              <button style={styles.cancelBtn} onClick={() => setEditingDate(false)}>취소</button>
-              <button style={styles.saveBtn} onClick={handleDateSave}>저장</button>
-            </div>
-          </div>
+              )}
+              <span className="relative z-10 flex items-center gap-1.5">
+                {t.icon} {t.label}
+              </span>
+            </button>
+          ))}
         </div>
-      )}
-      <div style={styles.tabs}>
-        {TABS.map((t) => (
-          <button key={t} style={{ ...styles.tab, ...(tab === t ? styles.tabActive : {}) }} onClick={() => setTab(t)}>
-            {t}
-          </button>
-        ))}
       </div>
-      <div style={styles.content}>
-        {tab === "지도" && <MapView workspaceId={workspaceId} />}
-        {tab === "일정" && <ItineraryBoard workspaceId={workspaceId} />}
-        {tab === "가계부" && <ExpenseTracker workspaceId={workspaceId} />}
-      </div>
+
+      {/* ━━━ 콘텐츠 패널 ━━━ */}
+      <AnimatePresence mode="wait">
+        {/* 지도 탭: 왼쪽 사이드 패널만 (지도는 이미 보임) */}
+        {tab === "지도" && (
+          <motion.div
+            key="map-panel"
+            variants={panelVariants}
+            initial="hidden" animate="visible" exit="exit"
+            className="absolute left-4 top-44 bottom-4 w-80 z-30 rounded-3xl overflow-hidden flex flex-col"
+          >
+            <MapView workspaceId={workspaceId} sidebarOnly />
+          </motion.div>
+        )}
+
+        {/* 일정 탭: 왼쪽 로지스틱 + 오른쪽 칸반 보드 */}
+        {tab === "일정" && (
+          <motion.div
+            key="itinerary-panel"
+            variants={overlayVariants}
+            initial="hidden" animate="visible" exit="exit"
+            className="absolute inset-x-4 top-44 bottom-4 z-30 rounded-3xl overflow-hidden"
+          >
+            <ItineraryBoard workspaceId={workspaceId} />
+          </motion.div>
+        )}
+
+        {/* 가계부 탭: 전체 오버레이 패널 */}
+        {tab === "가계부" && (
+          <motion.div
+            key="expense-panel"
+            variants={overlayVariants}
+            initial="hidden" animate="visible" exit="exit"
+            className="absolute inset-x-4 top-44 bottom-4 z-30 rounded-3xl overflow-hidden"
+          >
+            <ExpenseTracker workspaceId={workspaceId} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ━━━ 날짜 수정 모달 ━━━ */}
+      <AnimatePresence>
+        {editDate && (
+          <motion.div
+            key="date-overlay"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+            onClick={(e) => { if (e.target === e.currentTarget) setEditDate(false); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 25 } }}
+              exit={{ opacity: 0, y: 12, scale: 0.97 }}
+              className="bg-white rounded-3xl p-8 w-full max-w-md shadow-glass-lg"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-gray-800">여행 기간 설정</h3>
+                <button onClick={() => setEditDate(false)} className="text-gray-400 hover:text-gray-600 p-1">✕</button>
+              </div>
+              <div className="flex gap-3 items-end mb-4">
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">시작일</label>
+                  <input type="date" value={dateForm.start_date}
+                    onChange={(e) => setDateForm((f) => ({
+                      ...f, start_date: e.target.value,
+                      end_date: f.end_date && f.end_date < e.target.value ? e.target.value : f.end_date,
+                    }))}
+                    className="input-glass"
+                  />
+                </div>
+                <span className="text-gray-300 pb-3 text-lg">–</span>
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">종료일</label>
+                  <input type="date" value={dateForm.end_date} min={dateForm.start_date || undefined}
+                    onChange={(e) => setDateForm((f) => ({ ...f, end_date: e.target.value }))}
+                    className="input-glass"
+                  />
+                </div>
+              </div>
+              {(dateForm.start_date || dateForm.end_date) && (
+                <button onClick={() => setDateForm({ start_date: "", end_date: "" })}
+                  className="text-xs text-coral-500 font-medium mb-4 hover:text-coral-600">
+                  기간 삭제
+                </button>
+              )}
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => setEditDate(false)}
+                  className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-semibold hover:bg-gray-200 transition-colors">
+                  취소
+                </button>
+                <button onClick={saveDates}
+                  className="flex-2 flex-1 py-3 btn-coral rounded-xl font-bold">
+                  저장
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
-
-const styles = {
-  subbar: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 20px", background: "#fff", borderBottom: "1px solid #e5e7eb", flexWrap: "wrap", gap: 8 },
-  wsTitle: { fontWeight: 600, fontSize: 16 },
-  wsSub: { color: "#6b7280", fontSize: 14, borderLeft: "1px solid #e5e7eb", paddingLeft: 8 },
-  dateBadge: { fontSize: 13, color: "#4f46e5", background: "#eef2ff", padding: "2px 10px", borderRadius: 20 },
-  editDateBtn: { fontSize: 12, color: "#6b7280", background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "2px 8px", cursor: "pointer" },
-  inviteRow: { display: "flex", alignItems: "center", gap: 6, fontSize: 13 },
-  inviteLabel: { color: "#6b7280" },
-  inviteCode: { background: "#f3f4f6", padding: "2px 8px", borderRadius: 4, letterSpacing: 1, fontFamily: "monospace" },
-  copyBtn: { padding: "2px 8px", fontSize: 12, background: "none", border: "1px solid #d1d5db", borderRadius: 5, cursor: "pointer", color: "#4f46e5" },
-  tabs: { display: "flex", background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "0 20px" },
-  tab: { padding: "10px 16px", border: "none", background: "none", cursor: "pointer", fontSize: 14, color: "#6b7280", borderBottom: "2px solid transparent" },
-  tabActive: { color: "#4f46e5", borderBottom: "2px solid #4f46e5", fontWeight: 600 },
-  content: { flex: 1, overflow: "hidden" },
-  // 날짜 수정 모달
-  modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
-  modalCard: { background: "#fff", borderRadius: 12, padding: 28, width: 380, display: "flex", flexDirection: "column", gap: 12 },
-  dateRow: { display: "flex", alignItems: "flex-end", gap: 8 },
-  dateLabel: { margin: "0 0 4px", fontSize: 12, color: "#6b7280" },
-  dateSep: { color: "#9ca3af", paddingBottom: 10, fontSize: 18 },
-  input: { width: "100%", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, boxSizing: "border-box" },
-  clearBtn: { fontSize: 12, color: "#ef4444", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 },
-  btnRow: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 },
-  cancelBtn: { padding: "8px 16px", background: "#e5e7eb", color: "#374151", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14 },
-  saveBtn: { padding: "8px 16px", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14 },
-};
