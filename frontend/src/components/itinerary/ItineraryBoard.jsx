@@ -1,12 +1,6 @@
 import { useState } from "react";
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  closestCorners,
-} from "@dnd-kit/core";
+import { motion, AnimatePresence } from "framer-motion";
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners } from "@dnd-kit/core";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import DayColumn from "./DayColumn";
@@ -14,26 +8,14 @@ import PlacePicker from "../map/PlacePicker";
 import { itineraryApi } from "../../services/api";
 
 const MAP_LIBRARIES = ["places"];
-
-const EMPTY_FLIGHT = {
-  flight_number: "",
-  departure: null,   // { name, lat, lng, place_id }
-  arrival: null,
-  departure_time: "",
-  arrival_time: "",
-};
-const EMPTY_ACC = {
-  place: null,       // { name, formatted_address, lat, lng, place_id }
-  check_in: "",
-  check_out: "",
-};
+const EMPTY_FLIGHT  = { flight_number: "", departure: null, arrival: null, departure_time: "", arrival_time: "" };
+const EMPTY_ACC     = { place: null, check_in: "", check_out: "" };
 
 export default function ItineraryBoard({ workspaceId }) {
-  const { itinerary, flights, accommodations, reloadItinerary, addFlight, deleteFlight, addAccommodation, deleteAccommodation } = useWorkspaceStore();
+  const { itinerary, flights, accommodations, reloadItinerary, addFlight, deleteFlight, addAccommodation, deleteAccommodation } =
+    useWorkspaceStore();
   const [activeItem, setActiveItem] = useState(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-
-  // Maps API 로드 (PlacePicker 사용을 위해)
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries: MAP_LIBRARIES,
@@ -41,53 +23,56 @@ export default function ItineraryBoard({ workspaceId }) {
 
   const handleDragEnd = async ({ active, over }) => {
     if (!over || active.id === over.id) return;
-
-    const allItems = itinerary.flatMap((d) => d.items);
-    const draggedItem = allItems.find((i) => i.id === active.id);
-    if (!draggedItem) return;
-
+    const allItems   = itinerary.flatMap((d) => d.items);
+    const dragged    = allItems.find((i) => i.id === active.id);
+    if (!dragged) return;
     const targetDayId = over.data?.current?.dayId || over.id;
-    const targetDay = itinerary.find((d) => d.id === targetDayId);
+    const targetDay   = itinerary.find((d) => d.id === targetDayId);
     if (!targetDay) return;
-
     const newItems = targetDay.items.filter((i) => i.id !== active.id);
-    const overIndex = newItems.findIndex((i) => i.id === over.id);
-    const insertIndex = overIndex >= 0 ? overIndex : newItems.length;
-    newItems.splice(insertIndex, 0, { ...draggedItem, day_id: targetDayId });
-
-    await itineraryApi.reorder(workspaceId, { items: newItems.map((item, idx) => ({ id: item.id, day_id: targetDayId, order: idx })) });
+    const overIdx  = newItems.findIndex((i) => i.id === over.id);
+    newItems.splice(overIdx >= 0 ? overIdx : newItems.length, 0, { ...dragged, day_id: targetDayId });
+    await itineraryApi.reorder(workspaceId, { items: newItems.map((it, idx) => ({ id: it.id, day_id: targetDayId, order: idx })) });
     await reloadItinerary();
     setActiveItem(null);
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.logistics}>
+    <div className="h-full flex glass rounded-3xl overflow-hidden">
+      {/* ── 왼쪽: 로지스틱 패널 ── */}
+      <div className="w-60 flex-shrink-0 border-r border-white/40 overflow-y-auto">
         <LogisticsPanel
-          flights={flights}
-          accommodations={accommodations}
-          workspaceId={workspaceId}
-          mapsLoaded={isLoaded}
-          onAddFlight={addFlight}
-          onDeleteFlight={deleteFlight}
-          onAddAccommodation={addAccommodation}
-          onDeleteAccommodation={deleteAccommodation}
+          flights={flights} accommodations={accommodations}
+          workspaceId={workspaceId} mapsLoaded={isLoaded}
+          onAddFlight={addFlight} onDeleteFlight={deleteFlight}
+          onAddAccommodation={addAccommodation} onDeleteAccommodation={deleteAccommodation}
         />
       </div>
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={({ active }) => setActiveItem(active)} onDragEnd={handleDragEnd}>
-        <div style={styles.board}>
-          {itinerary.map((day) => (
-            <DayColumn key={day.id} day={day} workspaceId={workspaceId} />
-          ))}
-          {itinerary.length === 0 && (
-            <p style={styles.empty}>여행 기간을 설정하면 일정이 자동으로 만들어집니다.</p>
+
+      {/* ── 오른쪽: 칸반 보드 ── */}
+      <DndContext sensors={sensors} collisionDetection={closestCorners}
+        onDragStart={({ active }) => setActiveItem(active)} onDragEnd={handleDragEnd}>
+        <div className="flex-1 flex gap-3.5 p-5 overflow-x-auto items-start">
+          {itinerary.length === 0 ? (
+            <div className="flex flex-col items-center justify-center w-full py-20 gap-3 text-center">
+              <span className="text-5xl opacity-30">📅</span>
+              <h3 className="text-lg font-bold text-gray-700">일정이 없어요</h3>
+              <p className="text-sm text-gray-400">여행 기간을 설정하면<br />날짜별 일정이 자동으로 만들어집니다</p>
+            </div>
+          ) : (
+            itinerary.map((day) => <DayColumn key={day.id} day={day} workspaceId={workspaceId} />)
           )}
         </div>
         <DragOverlay>
           {activeItem ? (() => {
-            const item = itinerary.flatMap((d) => d.items).find((i) => i.id === activeItem.id);
+            const item  = itinerary.flatMap((d) => d.items).find((i) => i.id === activeItem.id);
             const label = item?.destination?.name || item?.note || "항목";
-            return <div style={styles.dragOverlay}>{label}</div>;
+            return (
+              <div className="bg-coral-500 text-white text-sm font-bold px-4 py-2.5 rounded-2xl
+                              shadow-[0_8px_24px_rgba(255,90,95,0.5)] rotate-2">
+                📍 {label}
+              </div>
+            );
           })() : null}
         </DragOverlay>
       </DndContext>
@@ -95,196 +80,232 @@ export default function ItineraryBoard({ workspaceId }) {
   );
 }
 
+/* ━━━ 로지스틱 패널 ━━━ */
 function LogisticsPanel({ flights, accommodations, workspaceId, mapsLoaded, onAddFlight, onDeleteFlight, onAddAccommodation, onDeleteAccommodation }) {
-  const [showFlightForm, setShowFlightForm] = useState(false);
+  const [showFlight, setShowFlight] = useState(false);
   const [flightForm, setFlightForm] = useState(EMPTY_FLIGHT);
-  const [showAccForm, setShowAccForm] = useState(false);
-  const [accForm, setAccForm] = useState(EMPTY_ACC);
+  const [showAcc,    setShowAcc]    = useState(false);
+  const [accForm,    setAccForm]    = useState(EMPTY_ACC);
 
   const handleAddFlight = async (e) => {
     e.preventDefault();
     if (!flightForm.departure || !flightForm.arrival) return;
     await onAddFlight(workspaceId, {
       flight_number: flightForm.flight_number,
-      departure_airport: flightForm.departure.name,
-      departure_lat: flightForm.departure.lat,
-      departure_lng: flightForm.departure.lng,
-      departure_place_id: flightForm.departure.place_id,
-      arrival_airport: flightForm.arrival.name,
-      arrival_lat: flightForm.arrival.lat,
-      arrival_lng: flightForm.arrival.lng,
-      arrival_place_id: flightForm.arrival.place_id,
-      departure_time: flightForm.departure_time || null,
-      arrival_time: flightForm.arrival_time || null,
+      departure_airport: flightForm.departure.name, departure_lat: flightForm.departure.lat, departure_lng: flightForm.departure.lng, departure_place_id: flightForm.departure.place_id,
+      arrival_airport: flightForm.arrival.name, arrival_lat: flightForm.arrival.lat, arrival_lng: flightForm.arrival.lng, arrival_place_id: flightForm.arrival.place_id,
+      departure_time: flightForm.departure_time || null, arrival_time: flightForm.arrival_time || null,
     });
-    setFlightForm(EMPTY_FLIGHT);
-    setShowFlightForm(false);
+    setFlightForm(EMPTY_FLIGHT); setShowFlight(false);
   };
 
   const handleAddAcc = async (e) => {
     e.preventDefault();
     if (!accForm.place) return;
     await onAddAccommodation(workspaceId, {
-      name: accForm.place.name,
-      address: accForm.place.formatted_address || null,
-      lat: accForm.place.lat,
-      lng: accForm.place.lng,
-      place_id: accForm.place.place_id,
-      check_in: accForm.check_in || null,
-      check_out: accForm.check_out || null,
+      name: accForm.place.name, address: accForm.place.formatted_address || null,
+      lat: accForm.place.lat, lng: accForm.place.lng, place_id: accForm.place.place_id,
+      check_in: accForm.check_in || null, check_out: accForm.check_out || null,
     });
-    setAccForm(EMPTY_ACC);
-    setShowAccForm(false);
+    setAccForm(EMPTY_ACC); setShowAcc(false);
   };
 
   return (
-    <div style={styles.logPanel}>
-      {/* ── 항공편 ── */}
-      <div style={styles.sectionHeader}>
-        <h4 style={styles.logTitle}>항공편</h4>
-        <button style={styles.addSmallBtn} onClick={() => { setShowFlightForm((v) => !v); setShowAccForm(false); }}>
-          {showFlightForm ? "✕" : "+"}
-        </button>
-      </div>
-
-      {showFlightForm && (
-        <form onSubmit={handleAddFlight} style={styles.inlineForm}>
-          <input
-            style={styles.inlineInput}
-            placeholder="편명 (예: KE001)"
-            value={flightForm.flight_number}
-            onChange={(e) => setFlightForm((f) => ({ ...f, flight_number: e.target.value }))}
-            required
-          />
-          <label style={styles.inlineLabel}>출발 공항</label>
-          {mapsLoaded ? (
-            <PlacePicker
-              placeholder="출발 공항 검색..."
-              selected={flightForm.departure?.name}
-              onSelect={(place) => setFlightForm((f) => ({ ...f, departure: place }))}
-              onClear={() => setFlightForm((f) => ({ ...f, departure: null }))}
-            />
-          ) : (
-            <input style={styles.inlineInput} placeholder="출발 공항" value={flightForm.departure?.name || ""}
-              onChange={(e) => setFlightForm((f) => ({ ...f, departure: { name: e.target.value } }))} />
+    <div className="p-4 space-y-5">
+      {/* 항공편 섹션 */}
+      <LogSection
+        icon="✈️" title="항공편" count={flights.length}
+        expanded={showFlight} onToggle={() => { setShowFlight((v) => !v); setShowAcc(false); }}
+      >
+        <AnimatePresence>
+          {showFlight && (
+            <motion.form
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+              onSubmit={handleAddFlight}
+              className="space-y-2.5 mt-2 overflow-hidden"
+            >
+              <FormField label="편명">
+                <input className="form-input-sm" placeholder="예: KE001" value={flightForm.flight_number}
+                  onChange={(e) => setFlightForm((f) => ({ ...f, flight_number: e.target.value }))} required />
+              </FormField>
+              <FormField label="출발 공항">
+                {mapsLoaded
+                  ? <PlacePicker placeholder="출발 공항…" selected={flightForm.departure?.name}
+                      onSelect={(p) => setFlightForm((f) => ({ ...f, departure: p }))}
+                      onClear={() => setFlightForm((f) => ({ ...f, departure: null }))} />
+                  : <input className="form-input-sm" placeholder="출발 공항" value={flightForm.departure?.name || ""}
+                      onChange={(e) => setFlightForm((f) => ({ ...f, departure: { name: e.target.value } }))} />
+                }
+              </FormField>
+              <FormField label="도착 공항">
+                {mapsLoaded
+                  ? <PlacePicker placeholder="도착 공항…" selected={flightForm.arrival?.name}
+                      onSelect={(p) => setFlightForm((f) => ({ ...f, arrival: p }))}
+                      onClear={() => setFlightForm((f) => ({ ...f, arrival: null }))} />
+                  : <input className="form-input-sm" placeholder="도착 공항" value={flightForm.arrival?.name || ""}
+                      onChange={(e) => setFlightForm((f) => ({ ...f, arrival: { name: e.target.value } }))} />
+                }
+              </FormField>
+              <div className="grid grid-cols-2 gap-2">
+                <FormField label="출발">
+                  <input type="datetime-local" className="form-input-sm" value={flightForm.departure_time}
+                    onChange={(e) => setFlightForm((f) => ({ ...f, departure_time: e.target.value }))} />
+                </FormField>
+                <FormField label="도착">
+                  <input type="datetime-local" className="form-input-sm" value={flightForm.arrival_time}
+                    onChange={(e) => setFlightForm((f) => ({ ...f, arrival_time: e.target.value }))} />
+                </FormField>
+              </div>
+              <FormBtns onCancel={() => setShowFlight(false)}
+                disabled={!flightForm.flight_number || !flightForm.departure || !flightForm.arrival} />
+            </motion.form>
           )}
-          <label style={styles.inlineLabel}>도착 공항</label>
-          {mapsLoaded ? (
-            <PlacePicker
-              placeholder="도착 공항 검색..."
-              selected={flightForm.arrival?.name}
-              onSelect={(place) => setFlightForm((f) => ({ ...f, arrival: place }))}
-              onClear={() => setFlightForm((f) => ({ ...f, arrival: null }))}
-            />
-          ) : (
-            <input style={styles.inlineInput} placeholder="도착 공항" value={flightForm.arrival?.name || ""}
-              onChange={(e) => setFlightForm((f) => ({ ...f, arrival: { name: e.target.value } }))} />
-          )}
-          <label style={styles.inlineLabel}>출발 시간</label>
-          <input style={styles.inlineInput} type="datetime-local" value={flightForm.departure_time}
-            onChange={(e) => setFlightForm((f) => ({ ...f, departure_time: e.target.value }))} />
-          <label style={styles.inlineLabel}>도착 시간</label>
-          <input style={styles.inlineInput} type="datetime-local" value={flightForm.arrival_time}
-            onChange={(e) => setFlightForm((f) => ({ ...f, arrival_time: e.target.value }))} />
-          <div style={styles.formBtnRow}>
-            <button type="button" style={styles.cancelSmall} onClick={() => setShowFlightForm(false)}>취소</button>
-            <button type="submit" style={styles.saveSmall} disabled={!flightForm.flight_number || !flightForm.departure || !flightForm.arrival}>추가</button>
-          </div>
-        </form>
-      )}
+        </AnimatePresence>
 
-      {flights.map((f) => (
-        <div key={f.id} style={styles.logItem}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <strong style={{ fontSize: 13 }}>{f.flight_number}</strong>
-            <p style={styles.logRoute}>{f.departure_airport} → {f.arrival_airport}</p>
+        {flights.length === 0 && !showFlight && (
+          <p className="text-xs text-gray-400 mt-1">등록된 항공편 없음</p>
+        )}
+        {flights.map((f) => (
+          <LogCard key={f.id} icon="✈️" onDelete={() => onDeleteFlight(workspaceId, f.id)}>
+            <p className="text-xs font-bold text-gray-800">{f.flight_number}</p>
+            <p className="text-[11px] text-gray-500 font-medium">{f.departure_airport} → {f.arrival_airport}</p>
             {f.departure_time && (
-              <p style={styles.logMeta}>{new Date(f.departure_time).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+              <p className="text-[11px] text-gray-400">
+                {new Date(f.departure_time).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </p>
             )}
-          </div>
-          <button style={styles.deleteBtn} onClick={() => onDeleteFlight(workspaceId, f.id)}>✕</button>
-        </div>
-      ))}
-      {flights.length === 0 && !showFlightForm && <p style={styles.logEmpty}>항공편 없음</p>}
+          </LogCard>
+        ))}
+      </LogSection>
 
-      {/* ── 숙소 ── */}
-      <div style={{ ...styles.sectionHeader, marginTop: 20 }}>
-        <h4 style={styles.logTitle}>숙소</h4>
-        <button style={styles.addSmallBtn} onClick={() => { setShowAccForm((v) => !v); setShowFlightForm(false); }}>
-          {showAccForm ? "✕" : "+"}
-        </button>
-      </div>
-
-      {showAccForm && (
-        <form onSubmit={handleAddAcc} style={styles.inlineForm}>
-          <label style={styles.inlineLabel}>숙소 검색</label>
-          {mapsLoaded ? (
-            <PlacePicker
-              placeholder="숙소 이름으로 검색..."
-              selected={accForm.place?.name}
-              onSelect={(place) => setAccForm((f) => ({ ...f, place }))}
-              onClear={() => setAccForm((f) => ({ ...f, place: null }))}
-            />
-          ) : (
-            <input style={styles.inlineInput} placeholder="숙소 이름" value={accForm.place?.name || ""}
-              onChange={(e) => setAccForm((f) => ({ ...f, place: { name: e.target.value } }))} />
+      {/* 숙소 섹션 */}
+      <LogSection
+        icon="🏨" title="숙소" count={accommodations.length}
+        expanded={showAcc} onToggle={() => { setShowAcc((v) => !v); setShowFlight(false); }}
+      >
+        <AnimatePresence>
+          {showAcc && (
+            <motion.form
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+              onSubmit={handleAddAcc}
+              className="space-y-2.5 mt-2 overflow-hidden"
+            >
+              <FormField label="숙소 검색">
+                {mapsLoaded
+                  ? <PlacePicker placeholder="숙소 이름으로 검색…" selected={accForm.place?.name}
+                      onSelect={(p) => setAccForm((f) => ({ ...f, place: p }))}
+                      onClear={() => setAccForm((f) => ({ ...f, place: null }))} />
+                  : <input className="form-input-sm" placeholder="숙소 이름" value={accForm.place?.name || ""}
+                      onChange={(e) => setAccForm((f) => ({ ...f, place: { name: e.target.value } }))} />
+                }
+                {accForm.place?.formatted_address && (
+                  <p className="text-[11px] text-gray-400 mt-0.5 truncate">{accForm.place.formatted_address}</p>
+                )}
+              </FormField>
+              <div className="grid grid-cols-2 gap-2">
+                <FormField label="체크인">
+                  <input type="datetime-local" className="form-input-sm" value={accForm.check_in}
+                    onChange={(e) => setAccForm((f) => ({ ...f, check_in: e.target.value }))} />
+                </FormField>
+                <FormField label="체크아웃">
+                  <input type="datetime-local" className="form-input-sm" value={accForm.check_out}
+                    min={accForm.check_in || undefined}
+                    onChange={(e) => setAccForm((f) => ({ ...f, check_out: e.target.value }))} />
+                </FormField>
+              </div>
+              <FormBtns onCancel={() => setShowAcc(false)} disabled={!accForm.place} />
+            </motion.form>
           )}
-          {accForm.place?.formatted_address && (
-            <p style={{ ...styles.inlineLabel, color: "#9ca3af", margin: 0 }}>{accForm.place.formatted_address}</p>
-          )}
-          <label style={styles.inlineLabel}>체크인</label>
-          <input style={styles.inlineInput} type="datetime-local" value={accForm.check_in}
-            onChange={(e) => setAccForm((f) => ({ ...f, check_in: e.target.value }))} />
-          <label style={styles.inlineLabel}>체크아웃</label>
-          <input style={styles.inlineInput} type="datetime-local" value={accForm.check_out}
-            min={accForm.check_in || undefined}
-            onChange={(e) => setAccForm((f) => ({ ...f, check_out: e.target.value }))} />
-          <div style={styles.formBtnRow}>
-            <button type="button" style={styles.cancelSmall} onClick={() => setShowAccForm(false)}>취소</button>
-            <button type="submit" style={styles.saveSmall} disabled={!accForm.place}>추가</button>
-          </div>
-        </form>
-      )}
+        </AnimatePresence>
 
-      {accommodations.map((a) => (
-        <div key={a.id} style={styles.logItem}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <strong style={{ fontSize: 13 }}>{a.name}</strong>
-            {a.address && <p style={styles.logMeta}>{a.address}</p>}
+        {accommodations.length === 0 && !showAcc && (
+          <p className="text-xs text-gray-400 mt-1">등록된 숙소 없음</p>
+        )}
+        {accommodations.map((a) => (
+          <LogCard key={a.id} icon="🏨" onDelete={() => onDeleteAccommodation(workspaceId, a.id)}>
+            <p className="text-xs font-bold text-gray-800 truncate">{a.name}</p>
+            {a.address && <p className="text-[11px] text-gray-400 truncate">{a.address}</p>}
             {a.check_in && (
-              <p style={styles.logMeta}>
+              <p className="text-[11px] text-emerald-600 font-medium">
                 체크인 {new Date(a.check_in).toLocaleDateString("ko-KR")}
                 {a.check_out && ` ~ ${new Date(a.check_out).toLocaleDateString("ko-KR")}`}
               </p>
             )}
-          </div>
-          <button style={styles.deleteBtn} onClick={() => onDeleteAccommodation(workspaceId, a.id)}>✕</button>
-        </div>
-      ))}
-      {accommodations.length === 0 && !showAccForm && <p style={styles.logEmpty}>숙소 없음</p>}
+          </LogCard>
+        ))}
+      </LogSection>
     </div>
   );
 }
 
-const styles = {
-  container: { display: "flex", height: "100%", overflow: "hidden" },
-  logistics: { width: 240, borderRight: "1px solid #e5e7eb", overflowY: "auto", background: "#fff" },
-  logPanel: { padding: 14 },
-  sectionHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  logTitle: { margin: 0, fontSize: 12, fontWeight: 600, color: "#4f46e5", textTransform: "uppercase", letterSpacing: 0.5 },
-  addSmallBtn: { width: 22, height: 22, borderRadius: "50%", border: "1px solid #d1d5db", background: "#f9fafb", cursor: "pointer", fontSize: 14, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#374151" },
-  logItem: { display: "flex", alignItems: "flex-start", gap: 4, padding: "6px 0", borderBottom: "1px solid #f3f4f6" },
-  logRoute: { margin: "2px 0 0", fontSize: 11, color: "#374151" },
-  logMeta: { margin: "2px 0 0", fontSize: 11, color: "#9ca3af" },
-  logEmpty: { fontSize: 12, color: "#9ca3af", margin: 0 },
-  deleteBtn: { background: "none", border: "none", color: "#d1d5db", cursor: "pointer", fontSize: 12, padding: "2px 4px", flexShrink: 0, lineHeight: 1 },
-  inlineForm: { display: "flex", flexDirection: "column", gap: 5, marginBottom: 8, background: "#f9fafb", padding: 8, borderRadius: 6 },
-  inlineInput: { padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 5, fontSize: 12, width: "100%", boxSizing: "border-box" },
-  inlineLabel: { fontSize: 11, color: "#6b7280", margin: "4px 0 0" },
-  formBtnRow: { display: "flex", gap: 4, marginTop: 4 },
-  cancelSmall: { flex: 1, padding: "5px", background: "#e5e7eb", border: "none", borderRadius: 5, cursor: "pointer", fontSize: 12 },
-  saveSmall: { flex: 1, padding: "5px", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 5, cursor: "pointer", fontSize: 12 },
-  board: { flex: 1, display: "flex", gap: 12, padding: 16, overflowX: "auto", alignItems: "flex-start" },
-  empty: { color: "#9ca3af", padding: 24, fontSize: 14 },
-  dragOverlay: { background: "#4f46e5", color: "#fff", padding: "8px 12px", borderRadius: 6, fontSize: 13 },
-};
+function LogSection({ icon, title, count, expanded, onToggle, children }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-base">{icon}</span>
+          <span className="text-xs font-bold text-gray-700 uppercase tracking-widest">{title}</span>
+          {count > 0 && (
+            <span className="text-[10px] font-bold bg-coral-500 text-white px-1.5 py-0.5 rounded-full">{count}</span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all duration-150
+            ${expanded
+              ? "bg-coral-50 text-coral-500 border border-coral-200"
+              : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+            }`}
+        >
+          {expanded ? "✕" : "+ 추가"}
+        </button>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function LogCard({ icon, children, onDelete }) {
+  return (
+    <div className="flex items-start gap-2 mt-2 p-2.5 bg-gray-50/80 rounded-xl group">
+      <span className="text-base flex-shrink-0 mt-0.5">{icon}</span>
+      <div className="flex-1 min-w-0 space-y-0.5">{children}</div>
+      <button onClick={onDelete}
+        className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-coral-400
+                   transition-all duration-150 text-xs px-1 flex-shrink-0">
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function FormField({ label, children }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function FormBtns({ onCancel, disabled }) {
+  return (
+    <div className="flex gap-2 pt-1">
+      <button type="button" onClick={onCancel}
+        className="flex-1 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+        취소
+      </button>
+      <button type="submit" disabled={disabled}
+        className="flex-1 py-1.5 bg-coral-500 hover:bg-coral-600 disabled:opacity-40 disabled:cursor-not-allowed
+                   text-white text-xs font-bold rounded-lg transition-colors">
+        추가
+      </button>
+    </div>
+  );
+}
+
+/* form-input-sm 유틸 클래스 주입 */
+const style = document.createElement("style");
+style.textContent = `.form-input-sm{width:100%;padding:6px 10px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:12px;outline:none;background:#fff;color:#1F2937;transition:border-color .15s;box-sizing:border-box;}.form-input-sm:focus{border-color:#FF5A5F;box-shadow:0 0 0 2px rgba(255,90,95,.12);}`;
+document.head.appendChild(style);

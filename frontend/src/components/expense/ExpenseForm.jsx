@@ -1,30 +1,26 @@
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { expenseApi } from "../../services/api";
 
-const CATEGORIES = [
-  { value: "transport", label: "교통" },
-  { value: "food", label: "식비" },
-  { value: "accommodation", label: "숙박" },
-  { value: "activity", label: "활동" },
-  { value: "shopping", label: "쇼핑" },
-  { value: "other", label: "기타" },
+const CATS = [
+  { value: "transport",     label: "교통", icon: "🚌" },
+  { value: "food",          label: "식비", icon: "🍜" },
+  { value: "accommodation", label: "숙박", icon: "🏨" },
+  { value: "activity",      label: "활동", icon: "🎡" },
+  { value: "shopping",      label: "쇼핑", icon: "🛍️" },
+  { value: "other",         label: "기타", icon: "📌" },
 ];
+
+const CURRENCIES = ["KRW", "USD", "JPY", "EUR", "CNY", "THB", "SGD", "AUD"];
 
 export default function ExpenseForm({ workspaceId, members, onClose }) {
   const [form, setForm] = useState({
-    title: "",
-    amount: "",
-    currency: "KRW",
-    category: "other",
-    participant_ids: members.map((m) => m.user.id),
-    date: "",
-    note: "",
+    title: "", amount: "", currency: "KRW", category: "other",
+    participant_ids: members.map((m) => m.user.id), date: "", note: "",
   });
+  const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
-  };
+  const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 
   const toggleParticipant = (uid) => {
     setForm((f) => ({
@@ -37,72 +33,143 @@ export default function ExpenseForm({ workspaceId, members, onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await expenseApi.create(workspaceId, {
-      ...form,
-      amount: parseFloat(form.amount),
-      date: form.date || null,
-    });
-    onClose();
+    setLoading(true);
+    try {
+      await expenseApi.create(workspaceId, { ...form, amount: parseFloat(form.amount), date: form.date || null });
+      onClose();
+    } finally { setLoading(false); }
   };
 
   return (
-    <div style={styles.overlay}>
-      <div style={styles.modal}>
-        <h3 style={styles.title}>지출 추가</h3>
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <input style={styles.input} name="title" placeholder="항목명" value={form.title} onChange={handleChange} required />
-          <div style={styles.row}>
-            <input style={{ ...styles.input, flex: 1 }} name="amount" type="number" placeholder="금액" value={form.amount} onChange={handleChange} required min="0" />
-            <select style={{ ...styles.input, width: 80 }} name="currency" value={form.currency} onChange={handleChange}>
-              <option>KRW</option>
-              <option>USD</option>
-              <option>JPY</option>
-              <option>EUR</option>
-              <option>CNY</option>
-            </select>
+    <AnimatePresence>
+      <motion.div
+        key="overlay"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6"
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 32, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 26 } }}
+          exit={{ opacity: 0, y: 16, scale: 0.97 }}
+          className="bg-white/95 backdrop-blur-xl rounded-3xl w-full max-w-md max-h-[90vh]
+                     overflow-y-auto shadow-glass-lg border border-white/60"
+        >
+          {/* 헤더 */}
+          <div className="flex items-center justify-between px-6 pt-6 pb-0">
+            <h3 className="text-xl font-black text-gray-800 tracking-tight">지출 추가</h3>
+            <button onClick={onClose}
+              className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center
+                         text-gray-400 hover:text-gray-600 transition-all duration-150 text-sm">
+              ✕
+            </button>
           </div>
-          <select style={styles.input} name="category" value={form.category} onChange={handleChange}>
-            {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-          </select>
-          <input style={styles.input} name="date" type="date" value={form.date} onChange={handleChange} />
-          <div>
-            <p style={styles.label}>참여자</p>
-            <div style={styles.checkboxGroup}>
-              {members.map((m) => (
-                <label key={m.user.id} style={styles.checkboxLabel}>
-                  <input
-                    type="checkbox"
-                    checked={form.participant_ids.includes(m.user.id)}
-                    onChange={() => toggleParticipant(m.user.id)}
-                  />
-                  {m.user.name}
-                </label>
-              ))}
+
+          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
+            {/* 항목명 */}
+            <Field label="항목명" required>
+              <input className="input-glass" name="title" placeholder="예: 오사카성 입장료"
+                value={form.title} onChange={(e) => set("title", e.target.value)} required autoFocus />
+            </Field>
+
+            {/* 금액 + 통화 */}
+            <Field label="금액" required>
+              <div className="flex gap-2">
+                <input className="input-glass flex-1" type="number" placeholder="0" min="0"
+                  value={form.amount} onChange={(e) => set("amount", e.target.value)} required />
+                <select className="input-glass w-24 flex-shrink-0" value={form.currency}
+                  onChange={(e) => set("currency", e.target.value)}>
+                  {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+            </Field>
+
+            {/* 카테고리 */}
+            <Field label="카테고리">
+              <div className="grid grid-cols-3 gap-2">
+                {CATS.map((c) => (
+                  <button key={c.value} type="button" onClick={() => set("category", c.value)}
+                    className={`flex flex-col items-center gap-1 py-2.5 px-2 rounded-2xl border-2 text-xs font-semibold
+                                transition-all duration-150
+                                ${form.category === c.value
+                                  ? "border-coral-500 bg-coral-50 text-coral-600 shadow-float"
+                                  : "border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-200 hover:bg-gray-100"
+                                }`}>
+                    <span className="text-xl">{c.icon}</span>
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            {/* 날짜 */}
+            <Field label="날짜" optional>
+              <input className="input-glass" type="date" value={form.date}
+                onChange={(e) => set("date", e.target.value)} />
+            </Field>
+
+            {/* 참여자 */}
+            {members.length > 0 && (
+              <Field label="참여자">
+                <div className="flex flex-wrap gap-2">
+                  {members.map((m) => {
+                    const on = form.participant_ids.includes(m.user.id);
+                    return (
+                      <button key={m.user.id} type="button" onClick={() => toggleParticipant(m.user.id)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full border-2 text-xs font-semibold
+                                    transition-all duration-150
+                                    ${on
+                                      ? "border-coral-500 bg-coral-50 text-coral-600"
+                                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                                    }`}>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black
+                                          ${on ? "bg-coral-500 text-white" : "bg-gray-200 text-gray-500"}`}>
+                          {m.user.name[0]}
+                        </div>
+                        {m.user.name}
+                        {on && <span className="text-coral-400 text-[10px]">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+            )}
+
+            {/* 메모 */}
+            <Field label="메모" optional>
+              <textarea className="input-glass resize-none" rows={2} placeholder="추가 메모…"
+                value={form.note} onChange={(e) => set("note", e.target.value)} />
+            </Field>
+
+            {/* 버튼 */}
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={onClose}
+                className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl font-semibold transition-colors">
+                취소
+              </button>
+              <motion.button type="submit" disabled={loading}
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                className="flex-[2] py-3.5 bg-coral-500 hover:bg-coral-600 disabled:opacity-50
+                           text-white rounded-2xl font-black tracking-tight transition-colors shadow-float">
+                {loading ? "저장 중…" : "저장하기"}
+              </motion.button>
             </div>
-          </div>
-          <textarea style={styles.textarea} name="note" placeholder="메모 (선택)" value={form.note} onChange={handleChange} rows={2} />
-          <div style={styles.btnRow}>
-            <button type="button" style={styles.cancelBtn} onClick={onClose}>취소</button>
-            <button type="submit" style={styles.submitBtn}>저장</button>
-          </div>
-        </form>
-      </div>
-    </div>
+          </form>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 }
 
-const styles = {
-  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
-  modal: { background: "#fff", borderRadius: 12, padding: 28, width: 380, maxHeight: "90vh", overflowY: "auto" },
-  title: { margin: "0 0 16px", fontSize: 18, fontWeight: 600 },
-  form: { display: "flex", flexDirection: "column", gap: 10 },
-  row: { display: "flex", gap: 8 },
-  input: { padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: 7, fontSize: 14 },
-  textarea: { padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: 7, fontSize: 14, resize: "none" },
-  label: { margin: "0 0 6px", fontSize: 13, color: "#374151" },
-  checkboxGroup: { display: "flex", flexWrap: "wrap", gap: 8 },
-  checkboxLabel: { display: "flex", alignItems: "center", gap: 4, fontSize: 13, cursor: "pointer" },
-  btnRow: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 },
-  cancelBtn: { padding: "9px 16px", background: "#e5e7eb", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 14 },
-  submitBtn: { padding: "9px 16px", background: "#4f46e5", color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 14 },
-};
+function Field({ label, required, optional, children }) {
+  return (
+    <div className="space-y-2">
+      <label className="flex items-center gap-1.5 text-xs font-bold text-gray-600 uppercase tracking-widest">
+        {label}
+        {required && <span className="text-coral-500">*</span>}
+        {optional && <span className="text-gray-300 font-normal normal-case tracking-normal">(선택)</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
