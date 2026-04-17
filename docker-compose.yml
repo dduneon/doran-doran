@@ -9,9 +9,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: mysql+aiomysql://dorandoran:password@YOUR_DB_HOST:3306/dorandoran
-      SECRET_KEY: change-me-in-production
-      GOOGLE_MAPS_API_KEY: YOUR_GOOGLE_MAPS_API_KEY
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
     volumes:
       - ./backend:/app
 
@@ -23,9 +23,9 @@ services:
     ports:
       - "5173:5173"
     environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
-      VITE_GOOGLE_MAPS_API_KEY: YOUR_GOOGLE_MAPS_API_KEY
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000}
+      VITE_GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
     depends_on:
       - backend
     volumes:
