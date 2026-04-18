@@ -35,6 +35,7 @@ export default function WorkspacePage() {
   const [copied, setCopied]         = useState(false);
   const [focusedDestination, setFocusedDestination] = useState(null);
   const [isMobile, setIsMobile]     = useState(() => window.innerWidth < 640);
+  const [panelVisible, setPanelVisible] = useState(true);
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -91,7 +92,7 @@ export default function WorkspacePage() {
           workspaceId={workspaceId}
           fullscreen
           focusedDestination={focusedDestination}
-          panOffset={tab === "지도" && !isMobile ? { x: -160, y: 0 } : null}
+          panOffset={tab === "지도" && panelVisible && !isMobile ? { x: -160, y: 0 } : null}
         />
       </div>
 
@@ -173,13 +174,33 @@ export default function WorkspacePage() {
         </div>
       </div>
 
-      {/* ━━━ 탭 셀렉터 ━━━ */}
-      <div className="absolute top-[116px] left-1/2 -translate-x-1/2 z-40">
+      {/* ━━━ 탭 셀렉터 + 패널 토글 버튼 ━━━ */}
+      <div className="absolute top-[116px] left-1/2 -translate-x-1/2 z-40 flex items-center gap-2">
+        {/* 패널 토글 버튼 (지도 탭일 때만) */}
+        <AnimatePresence>
+          {tab === "지도" && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              onClick={() => setPanelVisible((v) => !v)}
+              className="glass rounded-full p-2 text-gray-500 hover:text-coral-500 shadow-glass transition-colors duration-150"
+              title={panelVisible ? "패널 숨기기" : "패널 보기"}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                {panelVisible
+                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 19l-7-7 7-7M19.5 19l-7-7 7-7" />
+                  : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h16" />
+                }
+              </svg>
+            </motion.button>
+          )}
+        </AnimatePresence>
         <div className="glass rounded-full p-1 flex gap-0.5 shadow-glass">
           {TABS.map((t) => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => { setTab(t.id); setPanelVisible(true); }}
               className={`relative px-3 sm:px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200
                 ${tab === t.id ? "text-white shadow-float" : "text-gray-500 hover:text-gray-800"}`}
             >
@@ -203,7 +224,7 @@ export default function WorkspacePage() {
       <AnimatePresence mode="wait">
 
         {/* 지도 탭: 모바일=바텀시트 / 데스크톱=왼쪽 사이드 패널 */}
-        {tab === "지도" && (
+        {tab === "지도" && panelVisible && (
           <motion.div
             key="map-panel"
             variants={slideUp}

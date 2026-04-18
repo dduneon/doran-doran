@@ -10,6 +10,7 @@ export default function Navbar() {
 
   return (
     <nav className="
+      relative z-50
       h-16 px-6 flex items-center justify-between
       bg-white/80 backdrop-blur-xl
       border-b border-white/60

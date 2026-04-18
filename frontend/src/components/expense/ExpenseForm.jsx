@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { expenseApi } from "../../services/api";
 
@@ -40,23 +41,29 @@ export default function ExpenseForm({ workspaceId, members, onClose }) {
     } finally { setLoading(false); }
   };
 
-  return (
+  return createPortal(
     <AnimatePresence>
       <motion.div
         key="overlay"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6"
+        className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-6"
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
         <motion.div
-          initial={{ opacity: 0, y: 32, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 26 } }}
-          exit={{ opacity: 0, y: 16, scale: 0.97 }}
-          className="bg-white/95 backdrop-blur-xl rounded-3xl w-full max-w-md max-h-[90vh]
-                     overflow-y-auto shadow-glass-lg border border-white/60"
+          initial={{ opacity: 0, y: 48 }}
+          animate={{ opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 26 } }}
+          exit={{ opacity: 0, y: 32 }}
+          className="bg-white/95 backdrop-blur-xl w-full sm:max-w-md max-h-[92vh] sm:max-h-[90vh]
+                     overflow-y-auto shadow-glass-lg border border-white/60
+                     rounded-t-3xl sm:rounded-3xl"
         >
+          {/* 모바일 드래그 핸들 */}
+          <div className="sm:hidden flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 bg-gray-200 rounded-full" />
+          </div>
+
           {/* 헤더 */}
-          <div className="flex items-center justify-between px-6 pt-6 pb-0">
+          <div className="flex items-center justify-between px-5 sm:px-6 pt-3 sm:pt-6 pb-0">
             <h3 className="text-xl font-black text-gray-800 tracking-tight">지출 추가</h3>
             <button onClick={onClose}
               className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center
@@ -65,7 +72,7 @@ export default function ExpenseForm({ workspaceId, members, onClose }) {
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
+          <form onSubmit={handleSubmit} className="px-5 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5">
             {/* 항목명 */}
             <Field label="항목명" required>
               <input className="input-glass" name="title" placeholder="예: 오사카성 입장료"
@@ -157,7 +164,8 @@ export default function ExpenseForm({ workspaceId, members, onClose }) {
           </form>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners } from "@dnd-kit/core";
 import { useJsApiLoader } from "@react-google-maps/api";
@@ -14,7 +15,8 @@ const EMPTY_ACC     = { place: null, check_in: "", check_out: "" };
 export default function ItineraryBoard({ workspaceId }) {
   const { itinerary, flights, accommodations, reloadItinerary, addFlight, deleteFlight, addAccommodation, deleteAccommodation } =
     useWorkspaceStore();
-  const [activeItem, setActiveItem] = useState(null);
+  const [activeItem,  setActiveItem]  = useState(null);
+  const [mobileTab,   setMobileTab]   = useState("itinerary"); // "itinerary" | "logistics"
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
@@ -37,45 +39,93 @@ export default function ItineraryBoard({ workspaceId }) {
     setActiveItem(null);
   };
 
+  const logisticsProps = {
+    flights, accommodations, workspaceId, mapsLoaded: isLoaded,
+    onAddFlight: addFlight, onDeleteFlight: deleteFlight,
+    onAddAccommodation: addAccommodation, onDeleteAccommodation: deleteAccommodation,
+  };
+
   return (
-    <div className="h-full flex glass rounded-3xl overflow-hidden">
-      {/* ── 왼쪽: 로지스틱 패널 ── */}
-      <div className="w-60 flex-shrink-0 border-r border-white/40 overflow-y-auto">
-        <LogisticsPanel
-          flights={flights} accommodations={accommodations}
-          workspaceId={workspaceId} mapsLoaded={isLoaded}
-          onAddFlight={addFlight} onDeleteFlight={deleteFlight}
-          onAddAccommodation={addAccommodation} onDeleteAccommodation={deleteAccommodation}
-        />
+    <div className="h-full flex flex-col glass rounded-3xl overflow-hidden">
+
+      {/* ── 모바일 내부 탭 (sm 미만에서만 표시) ── */}
+      <div className="sm:hidden flex border-b border-white/40 flex-shrink-0">
+        {[["itinerary", "📅 일정"], ["logistics", "✈️ 항공·숙소"]].map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setMobileTab(id)}
+            className={`flex-1 py-3 text-sm font-semibold transition-colors duration-150
+              ${mobileTab === id
+                ? "text-coral-500 border-b-2 border-coral-500 bg-coral-50/40"
+                : "text-gray-400 hover:text-gray-600"
+              }`}
+          >
+            {label}
+            {id === "logistics" && (flights.length + accommodations.length) > 0 && (
+              <span className="ml-1.5 text-[10px] font-bold bg-coral-500 text-white px-1.5 py-0.5 rounded-full">
+                {flights.length + accommodations.length}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* ── 오른쪽: 칸반 보드 ── */}
-      <DndContext sensors={sensors} collisionDetection={closestCorners}
-        onDragStart={({ active }) => setActiveItem(active)} onDragEnd={handleDragEnd}>
-        <div className="flex-1 flex gap-3.5 p-5 overflow-x-auto items-start">
-          {itinerary.length === 0 ? (
-            <div className="flex flex-col items-center justify-center w-full py-20 gap-3 text-center">
-              <span className="text-5xl opacity-30">📅</span>
-              <h3 className="text-lg font-bold text-gray-700">일정이 없어요</h3>
-              <p className="text-sm text-gray-400">여행 기간을 설정하면<br />날짜별 일정이 자동으로 만들어집니다</p>
-            </div>
-          ) : (
-            itinerary.map((day) => <DayColumn key={day.id} day={day} workspaceId={workspaceId} />)
-          )}
+      {/* ── 본문 ── */}
+      <div className="flex-1 flex overflow-hidden">
+
+        {/* 로지스틱 패널: 데스크톱=항상 왼쪽 고정, 모바일=탭에 따라 */}
+        <div className={`
+          sm:w-56 sm:flex-shrink-0 sm:border-r sm:border-white/40 sm:overflow-y-auto
+          ${mobileTab === "logistics" ? "flex-1 overflow-y-auto" : "hidden sm:block"}
+        `}>
+          <LogisticsPanel {...logisticsProps} />
         </div>
-        <DragOverlay>
-          {activeItem ? (() => {
-            const item  = itinerary.flatMap((d) => d.items).find((i) => i.id === activeItem.id);
-            const label = item?.destination?.name || item?.note || "항목";
-            return (
-              <div className="bg-coral-500 text-white text-sm font-bold px-4 py-2.5 rounded-2xl
-                              shadow-[0_8px_24px_rgba(255,90,95,0.5)] rotate-2">
-                📍 {label}
+
+        {/* 일정 칸반: 수직 스크롤 */}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={({ active }) => setActiveItem(active)}
+          onDragEnd={handleDragEnd}
+        >
+          <div className={`
+            flex-1 overflow-y-auto
+            ${mobileTab === "itinerary" ? "flex flex-col" : "hidden sm:flex sm:flex-col"}
+          `}>
+            {itinerary.length === 0 ? (
+              <div className="flex flex-col items-center justify-center flex-1 gap-3 text-center p-8">
+                <span className="text-5xl opacity-30">📅</span>
+                <h3 className="text-lg font-bold text-gray-700">일정이 없어요</h3>
+                <p className="text-sm text-gray-400 leading-relaxed">
+                  여행 기간을 설정하면<br />날짜별 일정이 자동으로 만들어집니다
+                </p>
               </div>
-            );
-          })() : null}
-        </DragOverlay>
-      </DndContext>
+            ) : (
+              <div className="p-4 space-y-3">
+                {itinerary.map((day) => (
+                  <DayColumn key={day.id} day={day} workspaceId={workspaceId} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {createPortal(
+            <DragOverlay>
+              {activeItem ? (() => {
+                const item  = itinerary.flatMap((d) => d.items).find((i) => i.id === activeItem.id);
+                const label = item?.destination?.name || item?.note || "항목";
+                return (
+                  <div className="bg-coral-500 text-white text-sm font-bold px-4 py-2.5 rounded-2xl
+                                  shadow-[0_8px_24px_rgba(255,90,95,0.5)]">
+                    📍 {label}
+                  </div>
+                );
+              })() : null}
+            </DragOverlay>,
+            document.body
+          )}
+        </DndContext>
+      </div>
     </div>
   );
 }

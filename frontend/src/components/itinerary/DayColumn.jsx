@@ -99,7 +99,7 @@ export default function DayColumn({ day, workspaceId }) {
     : null;
 
   return (
-    <div className="flex-shrink-0 w-56 flex flex-col gap-2">
+    <div className="w-full flex flex-col gap-2">
       {/* 헤더 */}
       <div className="flex items-center gap-2 px-1">
         <div className="bg-coral-500 text-white text-xs font-black px-2.5 py-1 rounded-full shadow-float">
@@ -140,7 +140,7 @@ export default function DayColumn({ day, workspaceId }) {
           <motion.div
             key="form"
             initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-            className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl p-3 shadow-float space-y-2"
+            className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl p-3 shadow-float space-y-2 max-w-sm"
           >
             {/* 타입 탭 */}
             <div className="flex gap-1">

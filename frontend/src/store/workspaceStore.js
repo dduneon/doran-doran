@@ -17,8 +17,13 @@ export const useWorkspaceStore = create((set, get) => ({
   },
 
   fetchWorkspace: async (id) => {
-    // 워크스페이스 전환 시 이전 데이터 즉시 초기화
-    set({ current: null, destinations: [], itinerary: [], flights: [], accommodations: [], expenses: [], expenseSummary: null });
+    // destinations는 fetchDestinations가 항상 덮어쓰므로 여기서 clear하지 않음
+    // (clear하면 fetchDestinations와 race condition 발생 → 핀 사라짐 버그)
+    const prevId = get().current?.id;
+    if (prevId && String(prevId) !== String(id)) {
+      // 다른 워크스페이스로 전환할 때만 워크스페이스 관련 데이터 초기화 (destinations 제외)
+      set({ current: null, itinerary: [], flights: [], accommodations: [], expenses: [], expenseSummary: null });
+    }
     const { data } = await workspaceApi.get(id);
     set({ current: data });
   },
@@ -47,6 +52,7 @@ export const useWorkspaceStore = create((set, get) => ({
   // Destinations
   fetchDestinations: async (wsId) => {
     const { data } = await destinationApi.list(wsId);
+    // API 응답이 곧 정답 — 이전에 무엇이 있든 덮어씀
     set({ destinations: data });
   },
 
