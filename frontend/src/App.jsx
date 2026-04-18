@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import LoginPage from "./pages/Auth/LoginPage";
@@ -6,7 +7,14 @@ import DashboardPage from "./pages/Dashboard/DashboardPage";
 import WorkspacePage from "./pages/Workspace/WorkspacePage";
 
 function PrivateRoute({ children }) {
-  const token = useAuthStore((s) => s.token);
+  const token    = useAuthStore((s) => s.token);
+  const user     = useAuthStore((s) => s.user);
+  const fetchMe  = useAuthStore((s) => s.fetchMe);
+
+  useEffect(() => {
+    if (token && !user) fetchMe();
+  }, [token]);
+
   return token ? children : <Navigate to="/login" replace />;
 }
 
