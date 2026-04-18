@@ -33,6 +33,8 @@ export default function WorkspacePage() {
   const [editDate, setEditDate]     = useState(false);
   const [dateForm, setDateForm]     = useState({ start_date: "", end_date: "" });
   const [copied, setCopied]         = useState(false);
+  const [focusedDestination, setFocusedDestination] = useState(null);
+  const [isMobile, setIsMobile]     = useState(() => window.innerWidth < 640);
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -46,6 +48,12 @@ export default function WorkspacePage() {
     socketRef.current.connect();
     return () => socketRef.current?.disconnect();
   }, [workspaceId]);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const openDateEdit = () => {
     setDateForm({ start_date: toDateInput(current?.start_date), end_date: toDateInput(current?.end_date) });
@@ -68,15 +76,10 @@ export default function WorkspacePage() {
     ? `${fmtDate(current.start_date)}${current.end_date ? ` ~ ${fmtDate(current.end_date)}` : ""}`
     : null;
 
-  const panelVariants = {
-    hidden: { opacity: 0, x: -24, scale: 0.97 },
-    visible: { opacity: 1, x: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 28 } },
-    exit:   { opacity: 0, x: -16, scale: 0.97, transition: { duration: 0.15 } },
-  };
-  const overlayVariants = {
+  const slideUp = {
     hidden:  { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 280, damping: 24 } },
-    exit:    { opacity: 0, y: 10, transition: { duration: 0.15 } },
+    visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 28 } },
+    exit:    { opacity: 0, y: 12, transition: { duration: 0.15 } },
   };
 
   return (
@@ -84,7 +87,12 @@ export default function WorkspacePage() {
 
       {/* ━━━ 풀스크린 지도 (항상 렌더링) ━━━ */}
       <div className="absolute inset-0 z-0">
-        <MapView workspaceId={workspaceId} fullscreen />
+        <MapView
+          workspaceId={workspaceId}
+          fullscreen
+          focusedDestination={focusedDestination}
+          panOffset={tab === "지도" && !isMobile ? { x: -160, y: 0 } : null}
+        />
       </div>
 
       {/* ━━━ 상단 글래스 Navbar ━━━ */}
@@ -93,26 +101,33 @@ export default function WorkspacePage() {
       </div>
 
       {/* ━━━ 워크스페이스 정보 바 ━━━ */}
-      <div className="absolute top-16 inset-x-0 z-40 flex items-center justify-between px-5 py-2">
+      <div className="absolute top-16 inset-x-0 z-40 flex items-center justify-between px-3 sm:px-5 py-2 gap-2">
+
         {/* 왼쪽: 뒤로 + 워크스페이스 제목 */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={() => navigate("/")}
-            className="glass rounded-full p-2 text-gray-500 hover:text-coral-500 transition-colors duration-150"
+            className="glass rounded-full p-2 text-gray-500 hover:text-coral-500 transition-colors duration-150 flex-shrink-0"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <div className="glass rounded-2xl px-4 py-2 flex items-center gap-2.5">
-            <span className="font-bold text-gray-800 text-sm">{current?.title || "…"}</span>
-            {country && <span className="text-sm text-gray-500">{country.flag} {country.name}</span>}
-            {dateLabel
-              ? (
+          <div className="glass rounded-2xl px-3 py-2 flex items-center gap-1.5 min-w-0">
+            <span className="font-bold text-gray-800 text-sm truncate">{current?.title || "…"}</span>
+            {country && (
+              <span className="text-sm text-gray-500 flex-shrink-0">
+                {country.flag}
+                <span className="hidden sm:inline"> {country.name}</span>
+              </span>
+            )}
+            {/* 날짜: 데스크톱에서만 표시 */}
+            <span className="hidden sm:inline">
+              {dateLabel ? (
                 <button
                   onClick={openDateEdit}
                   className="text-xs text-coral-500 bg-coral-50 px-2.5 py-1 rounded-full font-semibold
-                             hover:bg-coral-100 transition-colors duration-150"
+                             hover:bg-coral-100 transition-colors duration-150 whitespace-nowrap"
                 >
                   📅 {dateLabel}
                 </button>
@@ -120,44 +135,53 @@ export default function WorkspacePage() {
                 <button
                   onClick={openDateEdit}
                   className="text-xs text-gray-400 bg-gray-100/80 px-2.5 py-1 rounded-full font-medium
-                             hover:text-coral-500 hover:bg-coral-50 transition-colors duration-150"
+                             hover:text-coral-500 hover:bg-coral-50 transition-colors duration-150 whitespace-nowrap"
                 >
                   + 기간 설정
                 </button>
-              )
-            }
+              )}
+            </span>
+            {/* 날짜: 모바일에서는 아이콘만 */}
+            {dateLabel && (
+              <button
+                onClick={openDateEdit}
+                className="sm:hidden text-sm flex-shrink-0"
+                title={dateLabel}
+              >
+                📅
+              </button>
+            )}
           </div>
         </div>
 
         {/* 오른쪽: 초대 코드 */}
-        <div className="glass rounded-2xl px-3 py-2 flex items-center gap-2">
-          <span className="text-xs text-gray-400 font-medium">초대 코드</span>
-          <code className="text-sm font-bold text-gray-700 tracking-widest">{current?.invite_code}</code>
+        <div className="glass rounded-2xl px-2 sm:px-3 py-2 flex items-center gap-1.5 flex-shrink-0">
+          <span className="hidden sm:inline text-xs text-gray-400 font-medium">초대 코드</span>
+          <code className="hidden sm:inline text-sm font-bold text-gray-700 tracking-widest">{current?.invite_code}</code>
+          {/* 모바일: 코드만 작게 표시 */}
+          <code className="sm:hidden text-xs font-bold text-gray-700 tracking-wider">{current?.invite_code}</code>
           <button
             onClick={copyCode}
-            className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all duration-150
+            className={`text-xs font-semibold px-2 py-1 rounded-lg transition-all duration-150 whitespace-nowrap
               ${copied
                 ? "bg-emerald-100 text-emerald-600"
                 : "bg-coral-50 text-coral-500 hover:bg-coral-100"
               }`}
           >
-            {copied ? "✓ 복사됨" : "복사"}
+            {copied ? "✓" : "복사"}
           </button>
         </div>
       </div>
 
-      {/* ━━━ 탭 셀렉터 (중앙 floating pills) ━━━ */}
+      {/* ━━━ 탭 셀렉터 ━━━ */}
       <div className="absolute top-[116px] left-1/2 -translate-x-1/2 z-40">
         <div className="glass rounded-full p-1 flex gap-0.5 shadow-glass">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`relative px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200
-                ${tab === t.id
-                  ? "text-white shadow-float"
-                  : "text-gray-500 hover:text-gray-800"
-                }`}
+              className={`relative px-3 sm:px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200
+                ${tab === t.id ? "text-white shadow-float" : "text-gray-500 hover:text-gray-800"}`}
             >
               {tab === t.id && (
                 <motion.div
@@ -166,8 +190,9 @@ export default function WorkspacePage() {
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
               )}
-              <span className="relative z-10 flex items-center gap-1.5">
-                {t.icon} {t.label}
+              <span className="relative z-10 flex items-center gap-1">
+                {t.icon}
+                <span className="hidden sm:inline">{t.label}</span>
               </span>
             </button>
           ))}
@@ -176,37 +201,42 @@ export default function WorkspacePage() {
 
       {/* ━━━ 콘텐츠 패널 ━━━ */}
       <AnimatePresence mode="wait">
-        {/* 지도 탭: 왼쪽 사이드 패널만 (지도는 이미 보임) */}
+
+        {/* 지도 탭: 모바일=바텀시트 / 데스크톱=왼쪽 사이드 패널 */}
         {tab === "지도" && (
           <motion.div
             key="map-panel"
-            variants={panelVariants}
+            variants={slideUp}
             initial="hidden" animate="visible" exit="exit"
-            className="absolute left-4 top-44 bottom-4 w-80 z-30 rounded-3xl overflow-hidden flex flex-col"
+            className="
+              absolute z-30 rounded-3xl overflow-hidden flex flex-col
+              left-3 right-3 bottom-3 max-h-[52vh]
+              sm:left-4 sm:right-auto sm:top-44 sm:bottom-4 sm:w-80 sm:max-h-none
+            "
           >
-            <MapView workspaceId={workspaceId} sidebarOnly />
+            <MapView workspaceId={workspaceId} sidebarOnly onFocusDestination={setFocusedDestination} />
           </motion.div>
         )}
 
-        {/* 일정 탭: 왼쪽 로지스틱 + 오른쪽 칸반 보드 */}
+        {/* 일정 탭 */}
         {tab === "일정" && (
           <motion.div
             key="itinerary-panel"
-            variants={overlayVariants}
+            variants={slideUp}
             initial="hidden" animate="visible" exit="exit"
-            className="absolute inset-x-4 top-44 bottom-4 z-30 rounded-3xl overflow-hidden"
+            className="absolute inset-x-3 sm:inset-x-4 top-44 bottom-3 sm:bottom-4 z-30 rounded-3xl overflow-hidden"
           >
             <ItineraryBoard workspaceId={workspaceId} />
           </motion.div>
         )}
 
-        {/* 가계부 탭: 전체 오버레이 패널 */}
+        {/* 가계부 탭 */}
         {tab === "가계부" && (
           <motion.div
             key="expense-panel"
-            variants={overlayVariants}
+            variants={slideUp}
             initial="hidden" animate="visible" exit="exit"
-            className="absolute inset-x-4 top-44 bottom-4 z-30 rounded-3xl overflow-hidden"
+            className="absolute inset-x-3 sm:inset-x-4 top-44 bottom-3 sm:bottom-4 z-30 rounded-3xl overflow-hidden"
           >
             <ExpenseTracker workspaceId={workspaceId} />
           </motion.div>
@@ -219,14 +249,14 @@ export default function WorkspacePage() {
           <motion.div
             key="date-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+            className="absolute inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={(e) => { if (e.target === e.currentTarget) setEditDate(false); }}
           >
             <motion.div
               initial={{ opacity: 0, y: 24, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 25 } }}
               exit={{ opacity: 0, y: 12, scale: 0.97 }}
-              className="bg-white rounded-3xl p-8 w-full max-w-md shadow-glass-lg"
+              className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-glass-lg"
             >
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-bold text-gray-800">여행 기간 설정</h3>

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from "@react-google-maps/api";
 import { useWorkspaceStore } from "../../store/workspaceStore";
@@ -23,7 +23,7 @@ const MAP_STYLE = [
  * sidebarOnly={true} → 지도는 없고 사이드바 패널만 렌더링 (지도탭 패널)
  * 기본 (둘 다 false) → 이전 방식 (사이드바 + 지도)
  */
-export default function MapView({ workspaceId, fullscreen = false, sidebarOnly = false }) {
+export default function MapView({ workspaceId, fullscreen = false, sidebarOnly = false, focusedDestination = null, onFocusDestination, panOffset = null }) {
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries: MAP_LIBRARIES,
@@ -36,12 +36,41 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
   const [pendingPlace, setPendingPlace] = useState(null);
   const [restrictCountry, setRestrictCountry] = useState(true);
   const placesServiceRef = useRef(null);
+  const mapRef = useRef(null);
 
   const countryCode = current?.destination_country || null;
   const countryInfo = getCountry(countryCode);
 
+  /* ──── focusedDestination 변경 시 지도 이동 ──── */
+  useEffect(() => {
+    if (!focusedDestination || !mapRef.current) return;
+    const map = mapRef.current;
+
+    const panWithOffset = () => {
+      const projection = map.getProjection();
+      if (!projection) return;
+
+      const target = new window.google.maps.LatLng(focusedDestination.lat, focusedDestination.lng);
+      if (panOffset) {
+        const scale = Math.pow(2, map.getZoom());
+        const worldPoint = projection.fromLatLngToPoint(target);
+        const offsetPoint = new window.google.maps.Point(
+          worldPoint.x + panOffset.x / scale,
+          worldPoint.y + panOffset.y / scale,
+        );
+        map.panTo(projection.fromPointToLatLng(offsetPoint));
+      } else {
+        map.panTo(target);
+      }
+      setSelected(focusedDestination);
+    };
+
+    panWithOffset();
+  }, [focusedDestination]);
+
   /* ──── 이벤트 핸들러 ──── */
   const handleMapLoad = (map) => {
+    mapRef.current = map;
     placesServiceRef.current = new window.google.maps.places.PlacesService(document.createElement("div"));
   };
 
@@ -71,8 +100,6 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
           }
         }
       );
-    } else {
-      setClickedPOI({ name: `${e.latLng.lat().toFixed(5)}, ${e.latLng.lng().toFixed(5)}`, lat: e.latLng.lat(), lng: e.latLng.lng() });
     }
   };
 
@@ -121,13 +148,13 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
       ))}
       {accommodations.filter((a) => a.lat && a.lng).map((a) => (
         <Marker key={`acc-${a.id}`} position={{ lat: a.lat, lng: a.lng }}
-          icon={{ url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" }}
+          icon={{ url: "https://maps.google.com/mapfiles/ms/icons/green-dot.png" }}
           onClick={() => { setClickedPOI(null); setSelected({ ...a, _type: "accommodation" }); }}
         />
       ))}
       {flights.filter((f) => f.departure_lat && f.departure_lng).map((f) => (
         <Marker key={`dep-${f.id}`} position={{ lat: f.departure_lat, lng: f.departure_lng }}
-          icon={{ url: "http://maps.google.com/mapfiles/ms/icons/purple-dot.png" }}
+          icon={{ url: "https://maps.google.com/mapfiles/ms/icons/purple-dot.png" }}
           onClick={() => setSelected({ name: `✈️ ${f.departure_airport}`, lat: f.departure_lat, lng: f.departure_lng })}
         />
       ))}
@@ -142,7 +169,7 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
       {clickedPOI && (
         <>
           <Marker position={{ lat: clickedPOI.lat, lng: clickedPOI.lng }}
-            icon={{ url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" }}
+            icon={{ url: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png" }}
           />
           <InfoWindow position={{ lat: clickedPOI.lat, lng: clickedPOI.lng }} onCloseClick={() => setClickedPOI(null)}>
             <div className="max-w-[220px] font-sans">
@@ -238,7 +265,7 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
                 animate={{ opacity: 1, x: 0 }}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl
                            hover:bg-white/60 transition-colors duration-100 cursor-pointer group"
-                onClick={() => { setClickedPOI(null); setSelected(d); }}
+                onClick={() => { setClickedPOI(null); setSelected(d); onFocusDestination?.(d); }}
               >
                 <div className="w-6 h-6 rounded-full bg-coral-500 text-white text-[11px] font-bold
                                 flex items-center justify-center flex-shrink-0">
