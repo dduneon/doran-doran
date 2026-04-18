@@ -31,17 +31,74 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
 
   const { destinations, accommodations, flights, addDestination, removeDestination, current } =
     useWorkspaceStore();
-  const [selected,     setSelected]     = useState(null);
-  const [clickedPOI,   setClickedPOI]   = useState(null);
-  const [pendingPlace, setPendingPlace] = useState(null);
+
+  const [selected,        setSelected]        = useState(null);
+  const [clickedPOI,      setClickedPOI]      = useState(null);
+  const [pendingPlace,    setPendingPlace]     = useState(null);
   const [restrictCountry, setRestrictCountry] = useState(true);
-  const placesServiceRef = useRef(null);
-  const mapRef = useRef(null);
+  const [stableCenter,    setStableCenter]     = useState(MAP_CENTER);
+  // map 인스턴스가 준비됐는지 추적 — useEffect 의존성에 사용
+  const [mapReady,        setMapReady]         = useState(false);
+
+  const placesServiceRef  = useRef(null);
+  const mapRef            = useRef(null);
+  // 명령형으로 관리하는 목적지 마커 목록
+  const destMarkersRef    = useRef([]);
 
   const countryCode = current?.destination_country || null;
   const countryInfo = getCountry(countryCode);
 
-  /* ──── focusedDestination 변경 시 지도 이동 ──── */
+  // destinations[0]이 생기면 중심 좌표 고정 — 이후 destinations가 빈 배열이 되어도 Seoul로 리셋되지 않음
+  useEffect(() => {
+    if (destinations[0]?.lat && destinations[0]?.lng) {
+      setStableCenter({ lat: destinations[0].lat, lng: destinations[0].lng });
+    }
+  }, [destinations[0]?.lat, destinations[0]?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ──── 목적지 마커를 명령형으로 관리 ────
+   * <Marker> 컴포넌트(선언형)는 React 조정 타이밍에 따라 간헐적으로 등록에 실패함.
+   * useEffect + 직접 API 호출로 교체하면 destinations 변경 시 항상 확실히 렌더링됨.
+   */
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+
+    // 기존 목적지 마커 제거
+    destMarkersRef.current.forEach((m) => m.setMap(null));
+    destMarkersRef.current = [];
+
+    destinations.forEach((d, idx) => {
+      if (!d.lat || !d.lng) return;
+      const marker = new window.google.maps.Marker({
+        position: { lat: d.lat, lng: d.lng },
+        map: mapRef.current,
+        label: { text: String(idx + 1), color: "#fff", fontWeight: "bold", fontSize: "11px" },
+      });
+      marker.addListener("click", () => {
+        setClickedPOI(null);
+        setSelected(d);
+        if (placesServiceRef.current && d.place_id) {
+          placesServiceRef.current.getDetails(
+            { placeId: d.place_id, fields: ["photos"] },
+            (place, status) => {
+              const photoUrl =
+                status === window.google.maps.places.PlacesServiceStatus.OK
+                  ? (place.photos?.[0]?.getUrl({ maxWidth: 400, maxHeight: 200 }) ?? null)
+                  : null;
+              setSelected((prev) => (prev?.id === d.id ? { ...prev, photoUrl } : prev));
+            }
+          );
+        }
+      });
+      destMarkersRef.current.push(marker);
+    });
+
+    return () => {
+      destMarkersRef.current.forEach((m) => m.setMap(null));
+      destMarkersRef.current = [];
+    };
+  }, [destinations, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ──── focusedDestination 변경 시 지도 이동 + 사진 로드 ──── */
   useEffect(() => {
     if (!focusedDestination || !mapRef.current) return;
     const map = mapRef.current;
@@ -63,15 +120,31 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
         map.panTo(target);
       }
       setSelected(focusedDestination);
+      // 사이드바에서 장소 클릭 시 사진도 함께 로드
+      if (placesServiceRef.current && focusedDestination.place_id) {
+        placesServiceRef.current.getDetails(
+          { placeId: focusedDestination.place_id, fields: ["photos"] },
+          (place, status) => {
+            const photoUrl =
+              status === window.google.maps.places.PlacesServiceStatus.OK
+                ? (place.photos?.[0]?.getUrl({ maxWidth: 400, maxHeight: 200 }) ?? null)
+                : null;
+            setSelected((prev) =>
+              prev?.id === focusedDestination.id ? { ...prev, photoUrl } : prev
+            );
+          }
+        );
+      }
     };
 
     panWithOffset();
-  }, [focusedDestination]);
+  }, [focusedDestination]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ──── 이벤트 핸들러 ──── */
   const handleMapLoad = (map) => {
     mapRef.current = map;
     placesServiceRef.current = new window.google.maps.places.PlacesService(document.createElement("div"));
+    setMapReady(true); // 이 시점부터 명령형 마커 useEffect가 실행 가능
   };
 
   const handlePlaceSelect = (place) => {
@@ -89,13 +162,14 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
     if (e.placeId) {
       e.stop();
       placesServiceRef.current?.getDetails(
-        { placeId: e.placeId, fields: ["place_id", "name", "formatted_address", "geometry"] },
+        { placeId: e.placeId, fields: ["place_id", "name", "formatted_address", "geometry", "photos"] },
         (place, status) => {
           if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
+            const photoUrl = place.photos?.[0]?.getUrl({ maxWidth: 400, maxHeight: 200 }) || null;
             setClickedPOI({
               name: place.name, address: place.formatted_address,
               lat: place.geometry.location.lat(), lng: place.geometry.location.lng(),
-              place_id: place.place_id,
+              place_id: place.place_id, photoUrl,
             });
           }
         }
@@ -121,12 +195,10 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
   );
 
   /* ──── 공통: 지도 렌더 ──── */
-  const mapCenter = destinations[0] ? { lat: destinations[0].lat, lng: destinations[0].lng } : MAP_CENTER;
-
   const googleMap = (
     <GoogleMap
       mapContainerStyle={{ width: "100%", height: "100%" }}
-      center={mapCenter}
+      center={stableCenter}
       zoom={12}
       onLoad={handleMapLoad}
       onClick={handleMapClick}
@@ -140,16 +212,23 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
         clickableIcons: true,
       }}
     >
-      {destinations.map((d, idx) => d.lat && d.lng && (
-        <Marker key={d.id} position={{ lat: d.lat, lng: d.lng }}
-          label={{ text: String(idx + 1), color: "#fff", fontWeight: "bold", fontSize: "11px" }}
-          onClick={() => { setClickedPOI(null); setSelected(d); }}
-        />
-      ))}
+      {/* 목적지 마커는 useEffect에서 명령형으로 관리 — 선언형 <Marker>는 사용하지 않음 */}
+
       {accommodations.filter((a) => a.lat && a.lng).map((a) => (
         <Marker key={`acc-${a.id}`} position={{ lat: a.lat, lng: a.lng }}
           icon={{ url: "https://maps.google.com/mapfiles/ms/icons/green-dot.png" }}
-          onClick={() => { setClickedPOI(null); setSelected({ ...a, _type: "accommodation" }); }}
+          onClick={() => {
+            setClickedPOI(null);
+            setSelected({ ...a, _type: "accommodation" });
+            placesServiceRef.current?.getDetails(
+              { placeId: a.place_id, fields: ["photos"] },
+              (place, status) => {
+                const photoUrl = status === window.google.maps.places.PlacesServiceStatus.OK
+                  ? (place.photos?.[0]?.getUrl({ maxWidth: 400, maxHeight: 200 }) ?? null) : null;
+                setSelected((prev) => prev?.id === a.id ? { ...prev, photoUrl } : prev);
+              }
+            );
+          }}
         />
       ))}
       {flights.filter((f) => f.departure_lat && f.departure_lng).map((f) => (
@@ -159,10 +238,32 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
         />
       ))}
       {selected && (
-        <InfoWindow position={{ lat: selected.lat, lng: selected.lng }} onCloseClick={() => setSelected(null)}>
-          <div className="max-w-[200px] font-sans">
-            <p className="font-bold text-gray-800 text-sm">{selected.name}</p>
-            {selected.address && <p className="text-xs text-gray-500 mt-1 leading-snug">{selected.address}</p>}
+        <InfoWindow
+          position={{ lat: selected.lat, lng: selected.lng }}
+          onCloseClick={() => setSelected(null)}
+          options={{ maxWidth: 260, disableAutoPan: false }}
+        >
+          <div style={{ fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif", overflow: "hidden", maxWidth: 240 }}>
+            {selected.photoUrl ? (
+              <img
+                src={selected.photoUrl}
+                alt={selected.name}
+                style={{ width: "calc(100% + 32px)", marginLeft: -16, marginTop: -12, height: 130, objectFit: "cover", display: "block", marginBottom: 10 }}
+              />
+            ) : (
+              <div style={{ width: "calc(100% + 32px)", marginLeft: -16, marginTop: -12, height: 80, background: "linear-gradient(135deg, #ff6b6b22 0%, #ff6b6b44 100%)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+                <span style={{ fontSize: 28 }}>📍</span>
+              </div>
+            )}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 6, marginBottom: 4 }}>
+              <span style={{ display: "inline-block", background: "#ff6b6b", color: "#fff", borderRadius: "50%", width: 18, height: 18, fontSize: 10, fontWeight: 700, textAlign: "center", lineHeight: "18px", flexShrink: 0, marginTop: 1 }}>
+                {destinations.findIndex((d) => d.id === selected.id) >= 0 ? destinations.findIndex((d) => d.id === selected.id) + 1 : "★"}
+              </span>
+              <p style={{ fontWeight: 700, fontSize: 13, color: "#1f2937", lineHeight: 1.4, margin: 0 }}>{selected.name}</p>
+            </div>
+            {selected.address && (
+              <p style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.5, margin: 0, paddingLeft: 24 }}>{selected.address}</p>
+            )}
           </div>
         </InfoWindow>
       )}
@@ -171,13 +272,30 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
           <Marker position={{ lat: clickedPOI.lat, lng: clickedPOI.lng }}
             icon={{ url: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png" }}
           />
-          <InfoWindow position={{ lat: clickedPOI.lat, lng: clickedPOI.lng }} onCloseClick={() => setClickedPOI(null)}>
-            <div className="max-w-[220px] font-sans">
-              <p className="font-bold text-gray-800 text-sm">{clickedPOI.name}</p>
-              {clickedPOI.address && <p className="text-xs text-gray-500 mt-1">{clickedPOI.address}</p>}
+          <InfoWindow
+            position={{ lat: clickedPOI.lat, lng: clickedPOI.lng }}
+            onCloseClick={() => setClickedPOI(null)}
+            options={{ maxWidth: 260, disableAutoPan: false }}
+          >
+            <div style={{ fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif", overflow: "hidden", maxWidth: 240 }}>
+              {clickedPOI.photoUrl ? (
+                <img
+                  src={clickedPOI.photoUrl}
+                  alt={clickedPOI.name}
+                  style={{ width: "calc(100% + 32px)", marginLeft: -16, marginTop: -12, height: 130, objectFit: "cover", display: "block", marginBottom: 10 }}
+                />
+              ) : (
+                <div style={{ width: "calc(100% + 32px)", marginLeft: -16, marginTop: -12, height: 80, background: "linear-gradient(135deg, #3b82f622 0%, #3b82f644 100%)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+                  <span style={{ fontSize: 28 }}>🔍</span>
+                </div>
+              )}
+              <p style={{ fontWeight: 700, fontSize: 13, color: "#1f2937", lineHeight: 1.4, margin: "0 0 4px" }}>{clickedPOI.name}</p>
+              {clickedPOI.address && (
+                <p style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.5, margin: "0 0 10px" }}>{clickedPOI.address}</p>
+              )}
               <button
                 onClick={() => { setPendingPlace({ ...clickedPOI, customName: clickedPOI.name }); setClickedPOI(null); }}
-                className="mt-2 w-full py-1.5 bg-coral-500 hover:bg-coral-600 text-white text-xs font-bold rounded-lg transition-colors"
+                style={{ width: "100%", padding: "7px 0", background: "#ff6b6b", color: "#fff", fontSize: 12, fontWeight: 700, border: "none", borderRadius: 10, cursor: "pointer" }}
               >
                 + 목적지에 추가
               </button>
@@ -265,7 +383,21 @@ export default function MapView({ workspaceId, fullscreen = false, sidebarOnly =
                 animate={{ opacity: 1, x: 0 }}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl
                            hover:bg-white/60 transition-colors duration-100 cursor-pointer group"
-                onClick={() => { setClickedPOI(null); setSelected(d); onFocusDestination?.(d); }}
+                onClick={() => {
+                  setClickedPOI(null);
+                  setSelected(d);
+                  onFocusDestination?.(d);
+                  if (placesServiceRef.current && d.place_id) {
+                    placesServiceRef.current.getDetails(
+                      { placeId: d.place_id, fields: ["photos"] },
+                      (place, status) => {
+                        const photoUrl = status === window.google.maps.places.PlacesServiceStatus.OK
+                          ? (place.photos?.[0]?.getUrl({ maxWidth: 400, maxHeight: 200 }) ?? null) : null;
+                        setSelected((prev) => prev?.id === d.id ? { ...prev, photoUrl } : prev);
+                      }
+                    );
+                  }
+                }}
               >
                 <div className="w-6 h-6 rounded-full bg-coral-500 text-white text-[11px] font-bold
                                 flex items-center justify-center flex-shrink-0">
